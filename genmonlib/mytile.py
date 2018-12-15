@@ -67,7 +67,7 @@ class MyTile (MyCommon):
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal/12*16)
                 self.Divisions = self.SetDefault(self.Divisions, 6)
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
-                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum + 1, self.Maximum / 4)))
+                self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum + 1), int(self.Maximum / 4))))
                 values = [self.Minimum, self.Nominal/12*11.5, self.Nominal/12*12.5, self.Nominal/12*15, self.Nominal/12*15.5, self.Maximum]
                 colors = [self.RED, self.YELLOW, self.GREEN, self.YELLOW, self.RED]
                 self.ColorZones = self.SetDefault(self.ColorZones, self.CreateColorZoneList(values, colors))
@@ -137,7 +137,7 @@ class MyTile (MyCommon):
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal + self.myround(self.Nominal * 0.05, 10))
                 self.Divisions = self.SetDefault(self.Divisions, 4)
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
-                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, self.Nominal / 4)))
+                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, int(self.Nominal / 4))))
                 values = [self.Minimum, self.Nominal - 75, self.Nominal - 50, self.Nominal + 50, self.Nominal + 75, self.Maximum]
                 colors = [self.RED, self.YELLOW, self.GREEN, self.YELLOW, self.RED]
                 self.ColorZones = self.SetDefault(self.ColorZones, self.CreateColorZoneList(values, colors))
@@ -192,6 +192,7 @@ class MyTile (MyCommon):
                 self.Minimum = self.SetDefault(self.Minimum, 0)
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal + int(self.Nominal * .20))
                 self.DefaultSize = self.SetDefault(self.DefaultSize, 2)
+                self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum), 1)))
                 self.TileType = "graph"
 
             else:
