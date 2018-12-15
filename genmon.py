@@ -508,15 +508,15 @@ class Monitor(MySupport):
                 if not len(item):
                     continue
                 item = item.strip()
-                LookUp = item
+                LookUp = item.decode("utf-8")
                 if b"=" in item:
                     BaseCmd = item.split('=')
-                    LookUp = BaseCmd[0]
+                    LookUp = BaseCmd[0].decode("utf-8")
                 # check if we disallow write commands via email
                 if self.ReadOnlyEmailCommands and not fromsocket and LookUp in ["settime", "setexercise", "setquiet", "setremote"]:
                     continue
 
-                ExecList = CommandDict.get(LookUp.lower(),None)
+                ExecList = CommandDict.get(LookUp.lower() ,None)
                 if ExecList == None:
                     continue
                 if ExecList[0] == None:
