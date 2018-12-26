@@ -1,6 +1,17 @@
 # Changelog
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
 
+## V1.12.2 - 2018-12-23
+- Changed format of JSON for better compatibility with external apps and exporting data
+- Minor mods to issue template
+- Corrected problem with simulation code
+- Added feature to test the email send settings
+- Fixed issue with graphic on logs page
+- Added run hours in last 30 days on Maintenance page for system that support power log
+
+## V1.12.1 - 2018-12-18
+- Added error code for change air filter alarm
+
 ## V1.12.0 - 2018-12-13
 - Python 3 updates, still recommend using Python 2.7 as it has been tested more, but this update allows for greater compatibility with Python 3.5
 
