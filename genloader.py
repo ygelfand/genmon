@@ -289,7 +289,7 @@ class Loader(MySupport):
                 except Exception as e1:
                     self.LogInfo("Error reading load order (retrying): " + str(e1), LogLine = True)
             #lambda kv: (-kv[1], kv[0])
-            for key, value in sorted(LoadDict.iteritems(), key=lambda kv: (-kv[1], kv[0])):
+            for key, value in sorted(LoadDict.items(), key=lambda kv: (-kv[1], kv[0])):
             #for key, value in sorted(LoadDict.iteritems(), key=lambda (k,v): (v,k)):
                 LoadOrder.append(key)
         except Exception as e1:
