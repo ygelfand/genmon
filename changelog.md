@@ -1,6 +1,32 @@
 # Changelog
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
 
+## V1.12.10 - 2019-01-09
+- Added entry to outage log for fuel consumption if fuel consumption supported by your generator
+
+## V1.12.9 - 2019-01-06
+- Fixed one problem with genloader.py load ordering
+- More updates for Python3 support
+
+## V1.12.8 - 2019-01-06
+- Updated install script to force pyowm version 2.9.0. Version 2.10 is python 3 only
+- Minor update to genmon.js to better convert JSON to HTML
+
+## V1.12.7 - 2019-01-02
+- Update for gengpioin.py triggers, added software debounce option to UI
+- Minor mod to genserv.py for debugging purposes
+- Updated code that returns numeric values for MQTT so JSON is not parsed twice
+
+## V1.12.6 - 2018-12-31
+- Added additional debug print for troubleshooting
+- Added new field for future features
+- Corrected spacing in an existing log entry
+
+## V1.12.5 - 2018-12-28
+- Update to allow GPIO Input parameters for pull up/down resistor and GPIO input trigger
+
+## V1.12.4 - 2018-12-28
+- Fixed bug with openweathermap icon
 
 ## V1.12.3 - 2018-12-27
 - Changed link to download openweathermap icon

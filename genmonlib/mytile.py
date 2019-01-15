@@ -123,7 +123,7 @@ class MyTile (MyCommon):
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal + 10)
                 self.Divisions = self.SetDefault(self.Divisions, int(self.Maximum / 10))
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
-                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum + 10, self.Maximum + 10, 10)))
+                self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum + 10), int(self.Maximum + 10), int(10))))
                 values = [self.Minimum, self.Nominal - 6, self.Nominal - 3, self.Nominal + 3, self.Nominal + 6, self.Maximum]
                 colors = [self.RED, self.YELLOW, self.GREEN, self.YELLOW, self.RED]
                 self.ColorZones = self.SetDefault(self.ColorZones, self.CreateColorZoneList(values, colors))
@@ -137,7 +137,7 @@ class MyTile (MyCommon):
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal + self.myround(self.Nominal * 0.05, 10))
                 self.Divisions = self.SetDefault(self.Divisions, 4)
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
-                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, int(self.Nominal / 4))))
+                self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum), int(self.Nominal / 4))))
                 values = [self.Minimum, self.Nominal - 75, self.Nominal - 50, self.Nominal + 50, self.Nominal + 75, self.Maximum]
                 colors = [self.RED, self.YELLOW, self.GREEN, self.YELLOW, self.RED]
                 self.ColorZones = self.SetDefault(self.ColorZones, self.CreateColorZoneList(values, colors))
@@ -150,7 +150,7 @@ class MyTile (MyCommon):
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal)
                 self.Divisions = self.SetDefault(self.Divisions, int(self.Maximum / 10))
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
-                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, self.Divisions)))
+                self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum), int(self.Divisions))))
                 values = [self.Minimum, int(self.Nominal * 0.10), int(self.Nominal * 0.25), int(self.Nominal)]
                 colors = [self.RED, self.YELLOW, self.GREEN]
                 self.ColorZones = self.SetDefault(self.ColorZones, self.CreateColorZoneList(values, colors))
@@ -164,10 +164,10 @@ class MyTile (MyCommon):
                 self.Divisions = self.SetDefault(self.Divisions, int(self.Maximum / 10))
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
                 if self.SubType.lower() == "coolant":
-                    self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, self.Divisions)))
+                    self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum), int(self.Divisions))))
                     values = [self.Minimum, self.Nominal + 20, self.Nominal + 40, self.Maximum]
                 else:
-                    self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, self.Divisions)))
+                    self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum), int(self.Divisions))))
                     values = [self.Minimum, self.Nominal, self.Nominal + int((self.Maximum - self.Nominal) / 2), self.Maximum]
                 colors = [self.GREEN, self.YELLOW, self.RED]
                 self.ColorZones = self.SetDefault(self.ColorZones, self.CreateColorZoneList(values, colors))
@@ -179,7 +179,7 @@ class MyTile (MyCommon):
                 self.Maximum = self.SetDefault(self.Maximum, self.Nominal + 10)
                 self.Divisions = self.SetDefault(self.Divisions, int(self.Maximum / 10))
                 self.SubDivisions = self.SetDefault(self.SubDivisions, 10)
-                self.Labels = self.SetDefault( self.Labels, list(range(self.Minimum, self.Maximum, self.Divisions)))
+                self.Labels = self.SetDefault( self.Labels, list(range(int(self.Minimum), int(self.Maximum), int(self.Divisions))))
                 # TODO
                 values = [self.Minimum, self.Nominal - 15, self.Nominal - 5, self.Nominal + 5, self.Nominal + 15, self.Maximum]
                 colors = [self.RED, self.YELLOW, self.GREEN, self.YELLOW, self.RED]
@@ -212,11 +212,11 @@ class MyTile (MyCommon):
     def CreateLabels(self, Minimum, Nominal, Maximum):
 
         if Maximum - Minimum < 15:
-            return list(range(self.Minimum, self.Maximum, 2))
+            return list(range(int(self.Minimum), int(self.Maximum), 2))
         elif Maximum - Minimum < 30:
-            return list(range(self.Minimum, self.Maximum, 5))
+            return list(range(int(self.Minimum), int(self.Maximum), 5))
         elif Maximum - Minimum < 45:
-            return list(range(self.Minimum, self.Maximum, 10))
+            return list(range(int(self.Minimum), int(self.Maximum), 10))
         else:
             RoundTo = 5
         ReturnList = []
@@ -284,6 +284,8 @@ class MyTile (MyCommon):
 
             GUIInfo["value"] = ValueStr
             GUIInfo["title"] = self.Title
+            GUIInfo["type"] = self.TileType
+            GUIInfo["subtype"] = self.Type
         except Exception as e1:
             self.LogErrorLine("Error in GetGUIInfo: " + str(e1))
         return GUIInfo
@@ -302,4 +304,8 @@ class MyTile (MyCommon):
         StartInfo["type"] = self.TileType
         StartInfo["subtype"] = self.Type
         StartInfo["default-size"] = self.DefaultSize
+        if self.Units == None:
+            StartInfo["units"] = ""
+        else:
+            StartInfo["units"] = self.Units
         return StartInfo

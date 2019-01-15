@@ -73,6 +73,7 @@ MYMODEM_CONFIG = "/etc/mymodem.conf"
 GENPUSHOVER_CONFIG = "/etc/genpushover.conf"
 GENMQTT_CONFIG = "/etc/genmqtt.conf"
 GENSLACK_CONFIG = "/etc/genslack.conf"
+GENGPIOIN_CONFIG = "/etc/gengpioin.conf"
 
 Closing = False
 Restarting = False
@@ -156,7 +157,7 @@ def ProcessCommand(command):
             "logs", "logs_json", "monitor", "monitor_json", "registers_json", "allregs_json",
             "start_info_json", "gui_status_json", "power_log_json", "power_log_clear",
             "getbase", "getsitename","setexercise", "setquiet", "setremote",
-            "settime", "sendregisters", "sendlogfiles", "getdebug" ]:
+            "settime", "sendregisters", "sendlogfiles", "getdebug", "status_num_json" ]:
             finalcommand = "generator: " + command
 
             try:
@@ -190,7 +191,8 @@ def ProcessCommand(command):
                 LogError("Error on command function: " + str(e1))
 
             if command in ["status_json", "outage_json", "maint_json", "monitor_json", "logs_json",
-                "registers_json", "allregs_json", "start_info_json", "gui_status_json", "power_log_json"]:
+                "registers_json", "allregs_json", "start_info_json", "gui_status_json", "power_log_json",
+                "status_num_json"]:
 
                 if command in ["start_info_json"]:
                     try:
@@ -356,7 +358,25 @@ def GetAddOns():
         AddOnCfg['gengpioin']['description'] = "Genmon will set Raspberry Pi GPIO inputs (see documentation for details)"
         AddOnCfg['gengpioin']['icon'] = "rpi"
         AddOnCfg['gengpioin']['url'] = "https://github.com/jgyates/genmon/wiki/1----Software-Overview#gengpioinpy-optional"
-        AddOnCfg['gengpioin']['parameters'] = None
+        AddOnCfg['gengpioin']['parameters'] = collections.OrderedDict()
+        AddOnCfg['gengpioin']['parameters']['trigger'] = CreateAddOnParam(
+            ConfigFiles[GENGPIOIN_CONFIG].ReadValue("trigger", return_type = str, default = "falling"),
+            'list',
+            "Set GPIO input to trigger on rising or falling edge.",
+            bounds = 'falling,rising,both',
+            display_name = "GPIO Edge Trigger")
+        AddOnCfg['gengpioin']['parameters']['resistorpull'] = CreateAddOnParam(
+            ConfigFiles[GENGPIOIN_CONFIG].ReadValue("resistorpull", return_type = str, default = "up"),
+            'list',
+            "Set GPIO input internal pull up or pull down resistor.",
+            bounds = 'up,down,off',
+            display_name = "Internal resistor pull")
+        AddOnCfg['gengpioin']['parameters']['bounce'] = CreateAddOnParam(
+            ConfigFiles[GENGPIOIN_CONFIG].ReadValue("bounce", return_type = int, default = 0),
+            'int',
+            "Minimum interval in milliseconds between valid input channges. Zero to disable, or positive whole number.",
+            bounds = 'number',
+            display_name = "Software Debounce")
 
         #GENLOG
         AddOnCfg['genlog'] = collections.OrderedDict()
@@ -671,7 +691,7 @@ def SaveAddOnSettings(query_string):
             "genlog" : ConfigFiles[GENLOADER_CONFIG],
             "gensyslog" : ConfigFiles[GENLOADER_CONFIG],
             "gengpio" : ConfigFiles[GENLOADER_CONFIG],
-            "gengpioin" : ConfigFiles[GENLOADER_CONFIG]
+            "gengpioin" : ConfigFiles[GENGPIOIN_CONFIG]
         }
 
         for module, entries in settings.items():   # module
@@ -1386,7 +1406,7 @@ if __name__ == "__main__":
         LogConsole("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'.")
         sys.exit(1)
 
-    ConfigFileList = [GENMON_CONFIG, MAIL_CONFIG, GENLOADER_CONFIG, GENSMS_CONFIG, MYMODEM_CONFIG, GENPUSHOVER_CONFIG, GENMQTT_CONFIG, GENSLACK_CONFIG]
+    ConfigFileList = [GENMON_CONFIG, MAIL_CONFIG, GENLOADER_CONFIG, GENSMS_CONFIG, MYMODEM_CONFIG, GENPUSHOVER_CONFIG, GENMQTT_CONFIG, GENSLACK_CONFIG, GENGPIOIN_CONFIG]
 
     for ConfigFile in ConfigFileList:
         if not os.path.isfile(ConfigFile):
@@ -1444,6 +1464,8 @@ if __name__ == "__main__":
         GStartInfo = json.loads(data)
     except Exception as e1:
         LogError("Error getting start info : " + str(e1))
+        LogError("Data returned from start_info_json: "  + data)
+        sys.exit(1)
 
     CacheToolTips()
     while True:
