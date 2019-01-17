@@ -496,7 +496,7 @@ class Monitor(MySupport):
                 if not len(item):
                     continue
                 item = item.strip()
-                LookUp = item.decode("utf-8")
+                LookUp = item
                 if "=" in item:
                     BaseCmd = item.split('=')
                     LookUp = BaseCmd[0].decode("utf-8")
