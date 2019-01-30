@@ -1,6 +1,22 @@
 # Changelog
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
 
+## V1.12.15 - 2019-01-25
+- Added option to disable TLS encryption 
+
+## V1.12.14 - 2019-01-23
+- Corrected issue with outage log reporting incorrect fuel usage for outages of zero duration
+
+## V1.12.13 - 2019-01-22
+- Added method to generate self signed key instead of using the Flask key by default. This will make Secure WebServer more reliable
+- Corrected typo in /conf/gengpioin.conf
+
+## V1.12.12 - 2019-01-21
+- Fixed problem with outage notifications in mynotify.py (effects add on programs) introduced in 1.12.2
+- Added more info relating to fuel estimation to help in troubleshooting issues.
+- Fixed formatting issue with login page for secure web settings
+- Improved message in low fuel warning email (only for controllers with fuel estimate calculations)
+
 ## V1.12.11 - 2019-01-15
 - Added new alarm code for NexusLC
 
