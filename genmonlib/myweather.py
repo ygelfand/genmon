@@ -99,14 +99,17 @@ class MyWeather(MySupport):
             return
         try:
             if self.Location.isdigit():
-                self.Observation = self.OWM.weather_at_id(int(self.Location))
+                if len(self.Location.strip()) == 5:     # Assume this is a zip code
+                    self.Observation = self.OWM.weather_at_zip_code(self.Location,"us")
+                else:
+                    self.Observation = self.OWM.weather_at_id(int(self.Location))
             else:
                 self.Observation = self.OWM.weather_at_place(self.Location)
             self.ObservationLocation = self.Observation.get_location()
         except Exception as e1:
             self.Observation = None
             self.ObservationLocation = None
-            self.LogErrorLine("Error in GetObservation: " + str(e1))
+            self.LogErrorLine("Error in GetObservation: " + "(" + str(self.Location) +  ") : " + str(e1))
 
     #---------------------WeatherThread-----------------------------------------
     def WeatherThread(self):
@@ -194,7 +197,7 @@ class MyWeather(MySupport):
 
                     TempDict = self.WeatherData.get_pressure()
                     if len(TempDict):
-                        Data.append({"Pressure" : str(TempDict.get("press", 0)) + " " + "hpa"})
+                        Data.append({"Pressure" : str(TempDict.get("press", 0)) + " " + "hPa"})
 
                     Data.append({"Sunrise Time" : datetime.datetime.fromtimestamp(int(self.WeatherData.get_sunrise_time())).strftime("%A %B %-d, %Y %H:%M:%S")})
                     Data.append({"Sunset Time" : datetime.datetime.fromtimestamp(int(self.WeatherData.get_sunset_time())).strftime("%A %B %-d, %Y %H:%M:%S")})

@@ -148,11 +148,12 @@ function GetQueryStringParams(sParam) {
     var sPageURL = window.location.search.substring(1);
     var sURLVariables = sPageURL.split('&');
     for (var i = 0; i < sURLVariables.length; i++) {
-	var sParameterName = sURLVariables[i].split('=');
-	if (sParameterName[0] == sParam)
-	   return sParameterName[1];
-    }
+      var sParameterName = sURLVariables[i].split('=');
+      if (sParameterName[0] == sParam)
+        return sParameterName[1];
+        }
 }
+
 
 //*****************************************************************************
 // called when setting a remote command
@@ -202,6 +203,8 @@ function CreateMenu() {
        outstr += '<li id="monitor"><a><table width="100%" height="100%"><tr><td width="28px" align="right" valign="middle"><img class="monitor" src="images/transparent.png" width="20px" height="20px"></td><td valign="middle">&nbsp;Monitor</td></tr></table></a></li>';
     if (myGenerator["pages"]["notifications"] == true)
        outstr += '<li id="notifications"><a><table width="100%" height="100%"><tr><td width="28px" align="right" valign="middle"><img class="notifications" src="images/transparent.png" width="20px" height="20px"></td><td valign="middle">&nbsp;Notifications</td></tr></table></a></li>';
+    if (myGenerator["pages"]["maintlog"] == true)
+       outstr += '<li id="journal"><a><table width="100%" height="100%"><tr><td width="28px" align="right" valign="middle"><img class="journal" src="images/transparent.png" width="20px" height="20px"></td><td valign="middle">&nbsp;Service Journal</td></tr></table></a></li>';
     if (myGenerator["pages"]["settings"] == true)
        outstr += '<li id="settings"><a><table width="100%" height="100%"><tr><td width="28px" align="right" valign="middle"><img class="settings" src="images/transparent.png" width="20px" height="20px"></td><td valign="middle">&nbsp;Settings</td></tr></table></a></li>';
     if (myGenerator["pages"]["addons"] == true)
@@ -214,7 +217,7 @@ function CreateMenu() {
 
     var page = GetQueryStringParams('page');
 
-    MenuClick(((page != undefined) && (jQuery.inArray( page, ["status", "maint", "outage", "logs", "monitor", "notifications", "settings", "addons", "about"] ))) ? page : "status");
+    MenuClick(((page != undefined) && (jQuery.inArray( page, ["status", "maint", "outage", "logs", "monitor", "notifications", "journal", "settings", "addons", "about"] ))) ? page : "status");
 
     $(".loader").removeClass("is-active");
 }
@@ -668,12 +671,15 @@ function DisplayMaintenance(){
                }
                outstr += '</select>';
 
-               //Create and append select list
-               outstr += '&nbsp;&nbsp;<select id="quietmode">';
-               outstr += '<option value="On" ' + (myGenerator['QuietMode'] == "On"  ? ' selected="selected" ' : '') + '>Quiet Mode On </option>';
-               outstr += '<option value="Off"' + (myGenerator['QuietMode'] == "Off" ? ' selected="selected" ' : '') + '>Quiet Mode Off</option>';
-               outstr += '</select><br><br>';
+               if (myGenerator['WriteQuietMode'] == true) {
+                 //Create and append select list
+                 outstr += '&nbsp;&nbsp;<select id="quietmode">';
+                 outstr += '<option value="On" ' + (myGenerator['QuietMode'] == "On"  ? ' selected="selected" ' : '') + '>Quiet Mode On </option>';
+                 outstr += '<option value="Off"' + (myGenerator['QuietMode'] == "Off" ? ' selected="selected" ' : '') + '>Quiet Mode Off</option>';
+                 outstr += '</select>';
+               }
 
+               outstr += '<br><br>'
                outstr += '&nbsp;&nbsp;<button id="setexercisebutton" onClick="saveMaintenance();">Set Exercise Time</button>';
             }
 
@@ -684,7 +690,9 @@ function DisplayMaintenance(){
                outstr += '<br><br>Remote Commands:<br><br>';
                outstr += '&nbsp;&nbsp;&nbsp;&nbsp;<button class="tripleButtonLeft" id="remotestop" onClick="SetClick(\'stop\');">Stop Generator</button>';
                outstr += '<button class="tripleButtonCenter" id="remotestart" onClick="SetClick(\'start\');">Start Generator</button>';
-               outstr += '<button class="tripleButtonRight"  id="remotetransfer" onClick="SetClick(\'starttransfer\');">Start Generator and Transfer</button>';
+               if (myGenerator['RemoteTransfer'] == true) {
+                 outstr += '<button class="tripleButtonRight"  id="remotetransfer" onClick="SetClick(\'starttransfer\');">Start Generator and Transfer</button>';
+               }
 
             }
 
@@ -981,10 +989,13 @@ function saveMaintenance(){
                                 function(result){});
 
                     // set quite mode
-                    var url = baseurl.concat("setquiet");
-                    $.getJSON(  url,
-                                {setquiet: strQuiet},
-                                function(result){});
+                    if (myGenerator['WriteQuietMode'] == true) {
+                      var url = baseurl.concat("setquiet");
+                      $.getJSON(  url,
+                                  {setquiet: strQuiet},
+                                  function(result){});
+                    }
+
                  }
             }
         });
@@ -1282,6 +1293,244 @@ function saveNotificationsJSON(){
         GenmonAlert("Error: invalid selection");
     }
 }
+
+
+//*****************************************************************************
+// Display the Journal Tab
+//*****************************************************************************
+
+// Additional Carriers are listed here: https://teamunify.uservoice.com/knowledgebase/articles/57460-communication-email-to-sms-gateway-list
+
+function DisplayJournal(){
+    var url = baseurl.concat("get_maint_log_json");
+    $.ajax({dataType: "json", url: url, timeout: 4000, error: processAjaxError, success: function(result){
+        processAjaxSuccess();
+
+        var  outstr = 'Journal Entires:<br><br>';
+        outstr += '<table id="alljournal" border="0" style="border-collapse: separate; border-spacing: 10px;" width="100%"><tbody>';
+
+        $.each(Object.keys(result), function(i, key) {
+            outstr += renderJournalLine(i, result[i]["date"], result[i]["type"], result[i]["hours"], result[i]["comment"]);
+        });
+        outstr += '</tbody></table><br>';
+        outstr += '<button value="+Add" id="addJournalRow">+Add</button>';
+        outstr += '<br><br><button value="Clear" id="clearJournal">Clear Journal</button>';
+
+        $("#mydisplay").html(outstr);
+
+        var rowcount = Object.keys(result).length;
+
+        $(document).ready(function() {
+           $("#addJournalRow").click(function () {
+                  var outstr = emptyJournalLine(rowcount, myGenerator['MonitorTime'], "", isNaN(parseFloat(myGenerator['RunHours'])) ? "" : parseFloat(myGenerator['RunHours']))
+                  if ($("#alljournal").length > 0) {
+                      $("#alljournal").append(outstr);
+                  } else {
+                      $("#alljournal").append(outstr);
+                  }
+                  $("input[name^='time_"+rowcount+"']").timepicker({ 'timeFormat': 'H:i' });
+                  $("input[name^='date_"+rowcount+"']").datepicker({ dateFormat: 'mm/dd/yy' })
+                  rowcount++;
+           });
+
+           $("#clearJournal").click(function () {
+              ClearJournal();
+           });
+
+        });
+   }});
+}
+//*****************************************************************************
+function renderJournalLine(rowcount, date, type, hours, comment) {
+
+   var outstr = '<tr id="row_' + rowcount + '"><td align="center">';
+   outstr += '  <div class="card" style="width:80%;align:center;" name="journal_' + rowcount + '">';
+   outstr += '     <div style="width:100%; background-color:#e1e1e1; border-radius: 6px 6px 0px 0px; float:left; padding-top:10px; padding-bottom:10px;">';
+   outstr += '         <table width="90%"><tr><td width="33%">Date: '+date+'</td><td width="33%">Type: '+type+'</td><td width="33%">Service Hours: '+hours+'</td></table>';
+   outstr += '     </div>';
+   outstr += '     <div style="clear: both;"></div>';
+   outstr += '     <div style="margin:10px;font-size: 15px;">'+comment+'</center></div>';
+   outstr += '     <div style="clear: both;"></div><br>';
+   outstr += '  </div>';
+   outstr += '</td>';
+
+   return outstr;
+}
+
+function emptyJournalLine(rowcount, date, type, hours, comment) {
+   var outstr = '<tr id="row_' + rowcount + '"><td align="center">';
+   outstr += '<form id="formNotifications">';
+   outstr += '  <div class="card" style="width:80%;align:center;" name="journal_' + rowcount + '">';
+   outstr += '     <div style="width:100%; background-color:#e1e1e1; border-radius: 6px 6px 0px 0px; float:left; padding-top:10px; padding-bottom:10px;">';
+   outstr += '         <center><table width="80%">';
+   outstr += '           <tr><td align="right" style="padding:3px">Date: &nbsp;&nbsp;&nbsp;</td><td style="padding:3px"><input id="date_' + rowcount + '" name="date_' + rowcount + '" type="text" value="'+date.split(" ")[0]+'">&nbsp;<input id="time_' + rowcount + '" name="time_' + rowcount + '" type="text" value="'+date.split(" ")[1]+'"></td></tr>';
+   outstr += '           <tr><td align="right" style="padding:3px">Type: &nbsp;&nbsp;&nbsp;</td><td style="padding:3px"><select id="type_' + rowcount + '" name="type_' + rowcount + '" ><option value="repair">Repair</option><option value="check">Check</option><option value="observation">Observation</option><option value="maintenance">Maintenance</option></select></td></tr>';
+   outstr += '           <tr><td align="right" style="padding:3px">Service Hours: &nbsp;&nbsp;&nbsp;</td><td style="padding:3px"><input id="hours_' + rowcount + '" name="hours_' + rowcount + '" type="text" value="'+hours+'"></td></tr>';
+   outstr += '         </table></center>';
+   outstr += '     </div>';
+   outstr += '     <div style="clear: both;"></div>';
+   outstr += '     <div style="margin:15px;font-size: 15px;"><textarea id="comment_' + rowcount + '" name="comment_' + rowcount + '" rows="4" style="width:100%;"></textarea></center></div>';
+   outstr += '     <div style="clear: both;"></div>';
+   outstr += '     <button id="setjournalbutton" onClick="saveJournals(' + rowcount + '); return false;">Save</button>';
+   outstr += '     <div style="clear: both;"></div><br>';
+   outstr += '  </div>';
+   outstr += '</form>';
+   outstr += '</td>';
+
+   return outstr;
+
+}
+
+
+//*****************************************************************************
+// called when Save Journals is clicked
+//*****************************************************************************
+function saveJournals(rowcount){
+
+    var DisplayStr = "Save journal? Are you sure?";
+    var DisplayStrAnswer = false;
+    var DisplayStrButtons = {
+        NO: {
+          text: 'Cancel',
+          type: 'button',
+          className: 'vex-dialog-button-secondary',
+          click: function noClick () {
+            DisplayStrAnswer = false
+            this.close()
+          }
+        },
+        YES: {
+          text: 'OK',
+          type: 'submit',
+          className: 'vex-dialog-button-primary',
+          click: function yesClick () {
+            DisplayStrAnswer = true
+          }
+        }
+    }
+
+    validationResult = ValidateJournalEntry($("input[name^='date_"+rowcount+"']").val(), $("input[name^='time_"+rowcount+"']").val(), $("select[name^='type_"+rowcount+"']").val(), $("input[name^='hours_"+rowcount+"']").val(), $("textarea[name^='comment_"+rowcount+"']").val());
+    if (validationResult != "OK") {
+       GenmonAlert("Data value not correct.<br>"+validationResult);
+       return false;
+    }
+
+    vex.dialog.open({
+        unsafeMessage: DisplayStr,
+        overlayClosesOnClick: false,
+        buttons: [
+           DisplayStrButtons.NO,
+           DisplayStrButtons.YES
+        ],
+        onSubmit: function(e) {
+           if (DisplayStrAnswer) {
+             DisplayStrAnswer = false; // Prevent recursive calls.
+             e.preventDefault();
+             saveJournalsJSON(rowcount);
+             var DisplayStr2 = '<div class="progress-bar"><span class="progress-bar-fill" style="width: 0%"></span></div>';
+             $('.vex-dialog-buttons').html(DisplayStr2);
+             $('.progress-bar-fill').queue(function () {
+                  $(this).css('width', '100%')
+             });
+             setTimeout(function(){ vex.closeAll();}, 2000);
+           }
+        }
+    })
+}
+
+//*****************************************************************************
+function saveJournalsJSON(rowcount){
+    try {
+        var fields = {};
+
+        var entry = {
+            date: $("input[name^='date_"+rowcount+"']").val()+" "+$("input[name^='time_"+rowcount+"']").val(),   // Format is text string:  MM/DD/YYYY
+            type: $("select[name^='type_"+rowcount+"']").val(),                                                  // Values are string: "Repair", "Maintenance", "Check" or "Observation"
+            hours: parseFloat($("input[name^='hours_"+rowcount+"']").val()),                                       // Must be a number (integer or floating point)
+            comment: $("textarea[name^='comment_"+rowcount+"']").val()                                           // Text string
+            };
+
+        // send command
+        var url = baseurl.concat("add_maint_log");
+        $.getJSON(  url,
+              {add_maint_log: JSON.stringify(entry)},
+              function(result){
+                 outstr = renderJournalLine(rowcount, entry["date"], entry["type"], entry["hours"], entry["comment"]);
+                 $("#row_"+rowcount).replaceWith(outstr);
+        });
+
+
+    } catch(err) {
+        GenmonAlert("Error: invalid selection");
+    }
+}
+
+//*****************************************************************************
+// called when adding an  entry to the maint log
+//*****************************************************************************
+function ValidateJournalEntry(date, time, type, hours, comment){
+
+  if ((typeof date != 'string') || (typeof time != 'string') || (typeof type != 'string') || (typeof hours != 'string') || (typeof comment != "string")){
+    return "Invalid type for Maint Log Entry "
+  }
+
+  hoursFloat = parseFloat(hours)
+  if ((typeof hoursFloat != "number") || isNaN(hoursFloat) || (hoursFloat == 0)){
+    return "Service Hours is not a number or 0"
+  }
+
+  // check type
+  if ((type.toLowerCase() !== 'repair') &&
+      (type.toLowerCase() !== 'check') &&
+      (type.toLowerCase() !== 'observation') &&
+      (type.toLowerCase() !== 'maintenance')) {
+          return "Invalid value for Type"
+  }
+
+  if (comment.trim() == "") {
+     return "Comment field must not be blank";
+  }
+
+  // check date
+  var date_regex = /^(0[1-9]|1[0-2])\/(0[1-9]|1\d|2\d|3[01])\/(19|20)\d{2}$/ ;
+  if(!(date_regex.test(date)))
+  {
+      return "Invalid date format, expecting MM/DD/YYYY: " + date;
+  }
+
+  var time_regex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/ ;
+  if(!(time_regex.test(time)))
+  {
+      return "Invalid time format, expecting HH:MM " + time;
+  }
+
+  return "OK"
+}
+
+//*****************************************************************************
+// called when adding an  entry to the maint log
+//*****************************************************************************
+function ClearJournal(){
+
+    vex.dialog.confirm({
+        unsafeMessage: 'Clear the Service Journal? This action cannot be undone.<br>',
+        overlayClosesOnClick: false,
+        callback: function (value) {
+             if (value == false) {
+                return;
+             } else {
+                var url = baseurl.concat("clear_maint_log");
+                $.getJSON(  url,
+                   {},
+                   function(result){
+                     $("#alljournal").empty();
+                   });
+             }
+        }
+    });
+}
+
+
 //*****************************************************************************
 // test email
 //*****************************************************************************
@@ -1292,19 +1541,24 @@ function TestEmailSettingsWrapper(){
 function TestEmailSettingsWrapperSubmit(email){
     $('.vex-dialog-message').html("<h4>Sending...</h4>");
     $('.vex-dialog-buttons').hide();
-    TestEmailSettings($("#smtp_server").val(), $("#smtp_port").val(), $("#email_account").val(), $("#sender_account").val(), email, $("#email_pw").val(), ($("#ssl_enabled").prop('checked')  === true ? "true" : "false"));
+    TestEmailSettings($("#smtp_server").val(), $("#smtp_port").val(), $("#email_account").val(),
+      $("#sender_account").val(),$("#sender_name").val(), email, $("#email_pw").val(),
+      ($("#ssl_enabled").prop('checked')  === true ? "true" : "false"),
+      ($("#tls_disable").prop('checked')  === true ? "true" : "false"));
 }
 
-function TestEmailSettings(smtp_server, smtp_port,email_account,sender_account,recipient, password, use_ssl){
+function TestEmailSettings(smtp_server, smtp_port,email_account,sender_account,sender_name,recipient, password, use_ssl, tls_disable){
 
     var parameters = {};
     parameters['smtp_server'] = smtp_server;
     parameters['smtp_port'] = smtp_port;
     parameters['email_account'] = email_account;
     parameters['sender_account'] = sender_account;
+    parameters['sender_name'] = sender_name;
     parameters['recipient'] = recipient;
     parameters['password'] = password;
     parameters['use_ssl'] = use_ssl;
+    parameters['tls_disable'] = tls_disable;
 
       // test email settings
       var url = baseurl.concat("test_email");
@@ -1424,7 +1678,7 @@ function DisplaySettings(){
              return regex.test(value);
            },
            InternetAddress: function(input, value, arg1, arg2) {
-             var regex = RegExp("^(([a-z0-9]+([\-\\.]{1}[a-z0-9]+)*\\.[a-z]{2,5}(\/.*)?)|(localhost(\/.*)?))$", 'g');
+             var regex = RegExp("^((([a-z0-9]+([\-\\.]{1}[a-z0-9]+)*\\.[a-z]{2,5}(\/.*)?)|(localhost(\/.*)?))|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\/.*)?))$", 'g');
              return regex.test(value);
            },
            IPAddress: function(input, value, arg1, arg2) {
@@ -2161,6 +2415,7 @@ function backupFiles(){
 }
 //*****************************************************************************
 function submitRegisters(){
+
     vex.dialog.confirm({
         unsafeMessage: 'Send the contents of your generator registers to the developer for compatibility testing?<br>',
         overlayClosesOnClick: false,
@@ -2678,6 +2933,9 @@ function MenuClick(page)
             case "notifications":
                 DisplayNotifications();
                 break;
+            case "journal":
+                DisplayJournal();
+                break;
             case "settings":
                 DisplaySettings();
                 break;
@@ -2883,7 +3141,7 @@ function UpdateDisplay()
         DisplayLogs();
     } else if (menuElement == "monitor") {
         DisplayMonitor();
-    } else if ((menuElement != "settings") && (menuElement != "notifications") && (menuElement != "addons") && (menuElement != "about") && (menuElement != "adv_settings")) {
+    } else if ((menuElement != "settings") && (menuElement != "notifications") && (menuElement != "journal") && (menuElement != "addons") && (menuElement != "about") && (menuElement != "adv_settings")) {
         GetDisplayValues(menuElement);
     }
 
@@ -2907,6 +3165,10 @@ function GetBaseStatus()
         myGenerator['QuietMode'] = result['ExerciseInfo']['QuietMode'];
         myGenerator['ExerciseFrequency'] = result['ExerciseInfo']['Frequency'];
         myGenerator['EnhancedExerciseEnabled'] = ((result['ExerciseInfo']['EnhancedExerciseMode'] === "False") ? false : true);
+
+        myGenerator['MonitorTime'] = result['MonitorTime'];
+        myGenerator['RunHours'] = result['RunHours'];
+
 
         if ((menuElement == "status") && (gauge.length > 0)) {
            for (var i = 0; i < result.tiles.length; ++i) {

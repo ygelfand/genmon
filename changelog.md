@@ -1,8 +1,83 @@
 # Changelog
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
 
+## V1.13.02 - 2019-04-26
+- Improved startup error handling to better respond if there are serial issues preventing the software from identifying the controller
+
+## V1.13.01 - 2019-04-22
+- Corrected one typo
+- Added code for debugging purposes
+
+## V1.13.00 - 2019-04-20
+- Added Add On for Email to SMS support
+
+## V1.12.33 - 2019-04-17
+- Support for Evolution Liquid Cooled Three phase
+
+## V1.12.32 - 2019-03-30
+- Added H-100 and G-Panel Regulator, Governor and Engine data
+- Added new alarm code for Nexus
+
+## V1.12.31 - 2019-03-29
+- Added more register reads in H and G Panel controller (need register submissions to complete adding more data to UI)
+- Corrected bug in /OtherApps/modbusdump.py
+- Update for 2008 model Pre-Nexus controllers (i.e. made in 2008 and do not have Nexus printed on them). Previously these controllers were not supported. See https://github.com/jgyates/genmon/wiki/Appendix-4-Known-Issues item 6 for more details.
+
+## V1.12.30 - 2019-03-20
+- H and G Panel update to address log responsiveness
+
+## V1.12.29 - 2019-03-19
+- Add user defined URL to email messages (see advanced page)
+- Modified H-100 email format to include explanation of email
+
+## V1.12.28 - 2019-03-18
+- Update for H and G Panel remote start / stop commands
+
+## V1.12.27 - 2019-03-15
+- Corrected problem with genercise.py to reduce unneeded writing to log file.
+
+## V1.12.26 - 2019-03-12
+- Initial support for HTS, MTS, STS transfer switches for H-Panel and G-Panel controllers
+
+## V1.12.25 - 2019-03-10
+- Added the ability to use floating point values for run hours in the service journal
+
+## V1.12.24 - 2019-03-08
+- Remove Line State for G Panel and H Panel if Smart Transfer Switch option is enabled
+
+## V1.12.23 - 2019-03-06
+- Minor update to email password validation
+- Change to allow test email to be sent without a password
+- Added option in Evolution Enhanced Exercise Add On to allow use of generator time instead of system time.
+
+## V1.12.22 - 2019-03-02
+- Fix bug in H-Panel code that was introduced with V1.12.21
+
+## V1.12.21 - 2019-02-25
+- Added Service Journal for creating a user journal of service and repair activities
+- Modified backup to  include the Service Journal.
+- Added new Add On functionality for enhanced exercise features (Transfer Exercise). This is available for Evolution Controllers only.
+- Updated gengpio.py to add GPIO pins for Monitor Health and Internet Connectivity Status
+
+## V1.12.20 - 2019-02-24
+- Updated alarm data for H-Panel for Emergency Stop
+
+## V1.12.19 - 2019-02-21
+- Added sender name in email settings
+- Fixed test email functional to support disabling TLS
+
+## V1.12.18 - 2019-02-08
+- Added battery check service due date for EvoAC
+
+## V1.12.17 - 2019-02-07
+- Initial update for maintenance log feature. GUI still needs work.
+- Corrected the display of the Run/Event log and Alarm log for the H-Panel and G-Panel Industrial controllers. This now displays the logs with the newest entries first.
+
+## V1.12.16 - 2019-02-02
+- Removed reset alarm from web interface for EvoAC as more testing is needed on this feature.
+
 ## V1.12.15 - 2019-01-25
-- Added option to disable TLS encryption 
+- Added option to disable TLS encryption
 
 ## V1.12.14 - 2019-01-23
 - Corrected issue with outage log reporting incorrect fuel usage for outages of zero duration

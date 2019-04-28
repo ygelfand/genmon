@@ -65,6 +65,7 @@ class Evolution(GeneratorController):
         self.SynergyController = False
         self.Evolution2 = False
         self.PowerPact = False
+        self.PreNexus  = False
         self.LiquidCooled = None
         self.LiquidCooledParams = None
         # State Info
@@ -77,6 +78,7 @@ class Evolution(GeneratorController):
         self.DisableOutageCheck = False
         self.SerialNumberReplacement = None
         self.AdditionalRunHours = None
+        self.NominalLineVolts = 240
 
         self.DaysOfWeek = { 0: "Sunday",    # decode for register values with day of week
                             1: "Monday",
@@ -277,8 +279,9 @@ class Evolution(GeneratorController):
             # check for unknown events (i.e. events we are not decoded) and send an email if they occur
             self.CheckForAlarmEvent.set()
             self.SetupTiles()
-            self.InitComplete = True
-            self.InitCompleteEvent.set()
+            if not self.EvolutionController == None and not self.LiquidCooled == None:
+                self.InitComplete = True
+                self.InitCompleteEvent.set()
         except Exception as e1:
             self.LogErrorLine("Error in InitDevice: " + str(e1))
 
@@ -286,11 +289,12 @@ class Evolution(GeneratorController):
     def SetupTiles(self):
 
         try:
+            self.TileList = []
             Tile = MyTile(self.log, title = "Battery Voltage", units = "V", type = "batteryvolts", nominal = 12, callback = self.GetBatteryVoltage, callbackparameters = (True,))
             self.TileList.append(Tile)
-            Tile = MyTile(self.log, title = "Utility Voltage", units = "V", type = "linevolts", nominal = 240, callback = self.GetUtilityVoltage, callbackparameters = (True,))
+            Tile = MyTile(self.log, title = "Utility Voltage", units = "V", type = "linevolts", nominal = self.NominalLineVolts, callback = self.GetUtilityVoltage, callbackparameters = (True,))
             self.TileList.append(Tile)
-            Tile = MyTile(self.log, title = "Output Voltage", units = "V", type = "linevolts", nominal = 240, callback = self.GetVoltageOutput, callbackparameters = (True,))
+            Tile = MyTile(self.log, title = "Output Voltage", units = "V", type = "linevolts", nominal = self.NominalLineVolts, callback = self.GetVoltageOutput, callbackparameters = (True,))
             self.TileList.append(Tile)
 
             if self.NominalFreq == None or self.NominalFreq == "" or self.NominalFreq == "Unknown":
@@ -351,88 +355,96 @@ class Evolution(GeneratorController):
     #---------------------------------------------------------------------------
     def CheckModelSpecificInfo(self, NoLookUp = False):
 
-        if self.NominalFreq == "Unknown" or not len(self.NominalFreq):
-            self.NominalFreq = self.GetModelInfo("Frequency")
-            if self.NominalFreq == "Unknown":
-                self.NominalFreq = "60"
-            self.config.WriteValue("nominalfrequency", self.NominalFreq)
+        try:
+            if self.NominalFreq == "Unknown" or not len(self.NominalFreq):
+                self.NominalFreq = self.GetModelInfo("Frequency")
+                if self.NominalFreq == "Unknown":
+                    self.NominalFreq = "60"
+                self.config.WriteValue("nominalfrequency", self.NominalFreq)
 
-        # This is not correct for 50Hz models
-        if self.NominalRPM == "Unknown" or not len(self.NominalRPM):
-            if self.LiquidCooled:
-                if self.NominalFreq == "50":
-                    self.NominalRPM = "1500"
-                else:
-                    self.NominalRPM = "1800"
-            else:
-                if self.NominalFreq == "50":
-                    self.NominalRPM = "3000"
-                else:
-                    self.NominalRPM = "3600"
-            self.config.WriteValue("nominalrpm", self.NominalRPM)
-
-        if self.NominalKW == "Unknown" or not len(self.NominalKW):
-            self.NominalKW = self.GetModelInfo("KW")
-            if self.NominalKW != "Unknown":
-                self.config.WriteValue("nominalkw", self.NominalKW)
-
-        if self.NewInstall:
-            if not self.ModelIsValid() or self.NominalKW == "Unknown":
-                ReturnStatus, ReturnModel, ReturnKW = self.LookUpSNInfo(SkipKW = (not self.NominalKW == "Unknown"), NoLookUp = NoLookUp)
-                if not ReturnStatus:
-                    if not self.ModelIsValid():
-                        self.Model = self.GetGenericModel()
-                        self.config.WriteValue("model", self.Model)
-                    if self.NominalKW == "Unknown":
-                        self.NominalKW = self.GetGenericKW()
-                        self.config.WriteValue("nominalkw", self.NominalKW)
-                else:
-                    if ReturnModel == "Unknown":
-                        self.Model = self.GetGenericModel()
+            # This is not correct for 50Hz models
+            if self.NominalRPM == "Unknown" or not len(self.NominalRPM):
+                if self.LiquidCooled:
+                    if self.NominalFreq == "50":
+                        self.NominalRPM = "1500"
                     else:
-                        self.Model = ReturnModel
-                    self.config.WriteValue("model", self.Model)
+                        self.NominalRPM = "1800"
+                else:
+                    if self.NominalFreq == "50":
+                        self.NominalRPM = "3000"
+                    else:
+                        self.NominalRPM = "3600"
+                self.config.WriteValue("nominalrpm", self.NominalRPM)
 
-                    if ReturnKW != "Unknown" and self.NominalKW == "Unknown":   # we found a valid Kw on the lookup
-                        self.NominalKW = ReturnKW
-                        self.config.WriteValue("nominalkw", self.NominalKW)
-                    elif ReturnKW == "Unknown" and self.NominalKW == "Unknown":
-                        self.NominalKW = self.GetGenericKW()
-                        self.config.WriteValue("nominalkw", self.NominalKW)
+            if self.NominalKW == "Unknown" or not len(self.NominalKW):
+                self.NominalKW = self.GetModelInfo("KW")
+                if self.NominalKW != "Unknown":
+                    self.config.WriteValue("nominalkw", self.NominalKW)
 
-        if self.FuelType == "Unknown" or not len(self.FuelType):
-            if self.LiquidCooled:
-                self.FuelType = self.GetModelInfo("Fuel")
-                if self.FuelType == "Unknown":
-                    if self.Model.startswith("RD"):
-                        self.FuelType = "Diesel"
-                    elif self.Model.startswith("RG"):
-                        if len(self.Model) >= 11:   # e.g. RD04834ADSE
-                            if self.Model[8] == "N":
-                                self.FuelType = "Natural Gas"
-                            elif self.Model[8] == "V":
-                                self.FuelType = "Propane"
-                            else:
-                                self.FuelType = "Propane"
-                    elif self.Model.startswith("QT"):
-                        self.FuelType = "Propane"
-                    elif self.LiquidCooled and self.EvolutionController:          # EvoLC
-                        if self.GetModelInfo("Fuel") == "Diesel":
-                            self.FuelType = "Diesel"
+            if self.NewInstall:
+                if not self.ModelIsValid() or self.NominalKW == "Unknown":
+                    ReturnStatus, ReturnModel, ReturnKW = self.LookUpSNInfo(SkipKW = (not self.NominalKW == "Unknown"), NoLookUp = NoLookUp)
+                    if not ReturnStatus:
+                        if not self.ModelIsValid():
+                            self.Model = self.GetGenericModel()
+                            self.config.WriteValue("model", self.Model)
+                        if self.NominalKW == "Unknown":
+                            self.NominalKW = self.GetGenericKW()
+                            self.config.WriteValue("nominalkw", self.NominalKW)
+                    else:
+                        if ReturnModel == "Unknown":
+                            self.Model = self.GetGenericModel()
                         else:
-                            self.FuelType = "Natural Gas"
-            else:
-                self.FuelType = "Propane"                           # NexusLC, NexusAC, EvoAC
-            self.config.WriteValue("fueltype", self.FuelType)
+                            self.Model = ReturnModel
+                        self.config.WriteValue("model", self.Model)
 
-        # This should fix issues with prefious installs of liquid cooled models that had the wrong fuel type
-        if self.LiquidCooled:
-            FuelType = self.GetModelInfo("Fuel")
-            if FuelType != "Unknown" and self.FuelType != FuelType:
-                self.FuelType = FuelType
+                        if ReturnKW != "Unknown" and self.NominalKW == "Unknown":   # we found a valid Kw on the lookup
+                            self.NominalKW = ReturnKW
+                            self.config.WriteValue("nominalkw", self.NominalKW)
+                        elif ReturnKW == "Unknown" and self.NominalKW == "Unknown":
+                            self.NominalKW = self.GetGenericKW()
+                            self.config.WriteValue("nominalkw", self.NominalKW)
+
+            if self.FuelType == "Unknown" or not len(self.FuelType):
+                if self.LiquidCooled:
+                    self.FuelType = self.GetModelInfo("Fuel")
+                    if self.FuelType == "Unknown":
+                        if self.Model.startswith("RD"):
+                            self.FuelType = "Diesel"
+                        elif self.Model.startswith("RG"):
+                            if len(self.Model) >= 11:   # e.g. RD04834ADSE
+                                if self.Model[8] == "N":
+                                    self.FuelType = "Natural Gas"
+                                elif self.Model[8] == "V":
+                                    self.FuelType = "Propane"
+                                else:
+                                    self.FuelType = "Propane"
+                        elif self.Model.startswith("QT"):
+                            self.FuelType = "Propane"
+                        elif self.LiquidCooled and self.EvolutionController:          # EvoLC
+                            if self.GetModelInfo("Fuel") == "Diesel":
+                                self.FuelType = "Diesel"
+                            else:
+                                self.FuelType = "Natural Gas"
+                else:
+                    self.FuelType = "Propane"                           # NexusLC, NexusAC, EvoAC
                 self.config.WriteValue("fueltype", self.FuelType)
 
-        self.EngineDisplacement = self.GetModelInfo("EngineDisplacement")
+            # This should fix issues with prefious installs of liquid cooled models that had the wrong fuel type
+            if self.LiquidCooled:
+                FuelType = self.GetModelInfo("Fuel")
+                if FuelType != "Unknown" and self.FuelType != FuelType:
+                    self.FuelType = FuelType
+                    self.config.WriteValue("fueltype", self.FuelType)
+            # Set Nominal Line Volts if three phase
+            try:
+                self.NominalLineVolts = int(self.GetModelInfo( "nominalvolts"))
+            except:
+                pass
+
+            self.EngineDisplacement = self.GetModelInfo("EngineDisplacement")
+        except Exception as e1:
+            self.LogErrorLine("Error in CheckModelSpecificInfo: " + str(e1))
 
     #----------  GeneratorController::FuelSensorSupported------------------------
     def FuelSensorSupported(self):
@@ -550,6 +562,8 @@ class Evolution(GeneratorController):
                 Polynomial.append(float(self.LiquidCooledParams[12]))
                 Polynomial.append(self.LiquidCooledParams[13])
                 return Polynomial
+        elif Request.lower() == "nominalvolts":
+            return self.LiquidCooledParams[1]
         elif Request.lower() == "fuel":
 
             Value = self.GetParameter("020c", ReturnInt = True)
@@ -570,43 +584,46 @@ class Evolution(GeneratorController):
     #------------ Evolution:GetModelInfo----------------------------------------
     def GetModelInfo(self, Request):
 
+        if self.LiquidCooled == None or self.EvolutionController == None:
+            return "Unknown"
+
         if self.LiquidCooled:
             return self.GetLiquidCooledModelInfo(Request)
 
         if self.LiquidCooled:
             return "Unknown"
 
-        # List format: [Rated kW, Freq, Voltage, Phase, Fuel Consumption Polynomial, Engine Displacement]
-        UnknownList = ["Unknown", "Unknown", "Unknown", "Unknown", None, "Unknown"]
+        # List format: [Rated kW, Freq, Voltage, Phase, Fuel Consumption Polynomial, Engine Displacement, Line Voltage]
+        UnknownList = ["Unknown", "Unknown", "Unknown", "Unknown", None, "Unknown", "Unknown"]
 
         # Nexus AC
         ModelLookUp_NexusAC = {
-                                0 : ["8KW", "60", "120/240", "1", None, "410 cc"],
-                                2 : ["14KW", "60", "120/240", "1", None, "992 cc"],
-                                3 : ["15KW", "60", "120/240", "1", None, "992 cc"],
-                                4 : ["20KW", "60", "120/240", "1", None, "999 cc"]
+                                0 : ["8KW", "60", "120/240", "1", None, "410 cc", "240"],
+                                2 : ["14KW", "60", "120/240", "1", None, "992 cc", "240"],
+                                3 : ["15KW", "60", "120/240", "1", None, "992 cc", "240"],
+                                4 : ["20KW", "60", "120/240", "1", None, "999 cc", "240"]
                                 }
         # This should cover the guardian line
         ModelLookUp_EvoAC = { #ID : [KW or KVA Rating, Hz Rating, Voltage Rating, Phase, Fuel Polynomial, Engine Displacement]
-                                1 : ["9KW", "60", "120/240", "1", [0, 1, 0.37, "gal"], "426 cc"],
-                                2 : ["14KW", "60", "120/240", "1", [0, 1.48, 0.82, "gal"], "992 cc"],
-                                3 : ["17KW", "60", "120/240", "1", [0, 3.16, 0.41, "gal"], "992 cc"],
-                                4 : ["20KW", "60", "120/240", "1", [0, 2.38, 1.18, "gal"], "999 cc"],
-                                5 : ["8KW", "60", "120/240", "1", [0, 1.48, 0.2, "gal"], "410 cc"],
-                                7 : ["13KW", "60", "120/240", "1", [0, 1.26, 0.92, "gal"], "992 cc"],
-                                8 : ["15KW", "60", "120/240", "1", [0, 1.84, 0.67, "gal"], "999 cc"],
-                                9 : ["16KW", "60", "120/240", "1", [0, 0.84, 2.1, "gal"], "999 cc"],
-                                10 : ["20KW", "VSCF", "120/240", "1", [0, 3.34, 0.12, "gal"], "999 cc"],          #Variable Speed Constant Frequency
-                                11 : ["15KW", "ECOVSCF", "120/240", "1", [0, 2.58, 0.61, "gal"], "999 cc"],       # Eco Variable Speed Constant Frequency
-                                12 : ["8KVA", "50", "220,230,240", "1", [0,  1.3, 0.21, "gal"], "530 cc"],        # 3 distinct models 220, 230, 240
-                                13 : ["10KVA", "50", "220,230,240", "1", [0, 1.48, 0.37, "gal"], "999 cc"],       # 3 distinct models 220, 230, 240
-                                14 : ["13KVA", "50", "220,230,240", "1", [0, 2.0, 0.39, "gal"], "999 cc"],        # 3 distinct models 220, 230, 240
-                                15 : ["11KW", "60" ,"240", "1", [0, 1.5, 0.47, "gal"], "530 cc"],
-                                17 : ["22KW", "60", "120/240", "1", [0, 2.74, 1.16, "gal"], "999 cc"],
-                                21 : ["11KW", "60", "240 LS", "1", [0, 1.5, 0.47, "gal"], "530 cc"],
-                                22 : ["7.5KW", "60", "240", "1", [0, 1.1, 0.32, "gal"], "420 cc"],                # Power Pact
-                                32 : ["20KW", "60", "208 3 Phase", "3", [0, 2.34, 1.22, "gal"], "999 cc"],      # Trinity G007077
-                                33 : ["Trinity", "50", "380,400,416", "3", None, None]                          # Discontinued
+                                1 : ["9KW", "60", "120/240", "1", [0, 1, 0.37, "gal"], "426 cc", "240"],
+                                2 : ["14KW", "60", "120/240", "1", [0, 1.48, 0.82, "gal"], "992 cc", "240"],
+                                3 : ["17KW", "60", "120/240", "1", [0, 3.16, 0.41, "gal"], "992 cc", "240"],
+                                4 : ["20KW", "60", "120/240", "1", [0, 2.38, 1.18, "gal"], "999 cc", "240"],
+                                5 : ["8KW", "60", "120/240", "1", [0, 1.48, 0.2, "gal"], "410 cc", "240"],
+                                7 : ["13KW", "60", "120/240", "1", [0, 1.26, 0.92, "gal"], "992 cc", "240"],
+                                8 : ["15KW", "60", "120/240", "1", [0, 1.84, 0.67, "gal"], "999 cc", "240"],
+                                9 : ["16KW", "60", "120/240", "1", [0, 0.84, 2.1, "gal"], "999 cc", "240"],
+                                10 : ["20KW", "VSCF", "120/240", "1", [0, 3.34, 0.12, "gal"], "999 cc", "240"],          #Variable Speed Constant Frequency
+                                11 : ["15KW", "ECOVSCF", "120/240", "1", [0, 2.58, 0.61, "gal"], "999 cc", "240"],       # Eco Variable Speed Constant Frequency
+                                12 : ["8KVA", "50", "220,230,240", "1", [0,  1.3, 0.21, "gal"], "530 cc", "240"],        # 3 distinct models 220, 230, 240
+                                13 : ["10KVA", "50", "220,230,240", "1", [0, 1.48, 0.37, "gal"], "999 cc", "240"],       # 3 distinct models 220, 230, 240
+                                14 : ["13KVA", "50", "220,230,240", "1", [0, 2.0, 0.39, "gal"], "999 cc", "240"],        # 3 distinct models 220, 230, 240
+                                15 : ["11KW", "60" ,"240", "1", [0, 1.5, 0.47, "gal"], "530 cc", "240"],
+                                17 : ["22KW", "60", "120/240", "1", [0, 2.74, 1.16, "gal"], "999 cc", "240"],
+                                21 : ["11KW", "60", "240 LS", "1", [0, 1.5, 0.47, "gal"], "530 cc", "240"],
+                                22 : ["7.5KW", "60", "240", "1", [0, 1.1, 0.32, "gal"], "420 cc", "240"],                # Power Pact
+                                32 : ["20KW", "60", "208 3 Phase", "3", [0, 2.34, 1.22, "gal"], "999 cc", "208"],      # Trinity G007077
+                                33 : ["Trinity", "50", "380,400,416", "3", None, None, "380"]                          # Discontinued
                                 }
 
         if self.SynergyController:
@@ -653,6 +670,8 @@ class Evolution(GeneratorController):
                 return "Unknown"
             else:
                 return ModelInfo[5]
+        elif Request.lower() == "nominalvolts":
+            return ModelInfo[6]
         return "Unknown"
 
     #---------------------------------------------------------------------------
@@ -815,8 +834,10 @@ class Evolution(GeneratorController):
             if ProductModel == 0x12:
                 self.PowerPact = True
 
+            if ProductModel == 0x02:
+                self.PreNexus = True
             # if reg 000 is 3 or less then assume we have a Nexus Controller
-            if ProductModel == 0x03 or ProductModel == 0x06:
+            if ProductModel == 0x03 or ProductModel == 0x06 or ProductModel == 0x02:
                 self.EvolutionController = False    #"Nexus"
             elif ProductModel == 0x09 or ProductModel == 0x0c or ProductModel == 0x0a  or ProductModel == 0x15 or ProductModel == 0x12:
                 self.EvolutionController = True     #"Evolution"
@@ -833,7 +854,7 @@ class Evolution(GeneratorController):
             self.LogError("DetectController auto-detect override (controller). EvolutionController now is %s" % str(self.EvolutionController))
 
         if self.LiquidCooled == None:
-            if ProductModel == 0x03 or ProductModel == 0x09 or ProductModel == 0x0a  or ProductModel == 0x15  or ProductModel == 0x12:
+            if ProductModel == 0x03 or ProductModel == 0x09 or ProductModel == 0x0a  or ProductModel == 0x15  or ProductModel == 0x12 or ProductModel == 0x02:
                 self.LiquidCooled = False    # Air Cooled
             elif ProductModel == 0x06 or ProductModel == 0x0c:
                 self.LiquidCooled = True     # Liquid Cooled
@@ -861,6 +882,7 @@ class Evolution(GeneratorController):
         if Actual:
 
             ControllerDecoder = {
+                0x02 :  "Pre-Nexus, Air Cooled",
                 0x03 :  "Nexus, Air Cooled",
                 0x06 :  "Nexus, Liquid Cooled",
                 0x09 :  "Evolution, Air Cooled",
@@ -888,7 +910,10 @@ class Evolution(GeneratorController):
                 else:
                     outstr = "Evolution, "
             else:
-                outstr = "Nexus, "
+                if self.PreNexus:
+                    outstr = "Pre-Nexus, "
+                else:
+                    outstr = "Nexus, "
             if self.LiquidCooled:
                 outstr += "Liquid Cooled"
             else:
@@ -948,6 +973,65 @@ class Evolution(GeneratorController):
                 self.ModBus.ProcessMasterSlaveTransaction(RegStr, NEXUS_ALARM_LOG_STRIDE)
                 if self.IsStopping:
                     return
+
+    #----------  GeneratorController:TestCommand--------------------------------
+    def TestCommand(self, CmdString):
+
+        msgbody = "Invalid command syntax for command testcommand (1)"
+
+        try:
+            #Format we are looking for is "testcommand=xx, where xx is a number"
+            CmdList = CmdString.split("=")
+            if len(CmdList) != 2:
+                self.LogError("Validation Error: Error parsing command string in TestCommand (parse): " + CmdString)
+                return msgbody
+
+            CmdList[0] = CmdList[0].strip()
+
+            if not CmdList[0].lower() == "testcommand":
+                self.LogError("Validation Error: Error parsing command string in TestCommand (parse2): " + CmdString)
+                return msgbody
+
+            Command = CmdList[1].strip()
+            Command = Command.lower()
+
+        except Exception as e1:
+            self.LogErrorLine("Validation Error: Error parsing command string in TestCommand: " + CmdString)
+            self.LogError( str(e1))
+            return msgbody
+
+        Register = 0
+        Value = 0x000               # writing any value to index register is valid for remote start / stop commands
+
+        try:
+            Register = int(Command)
+        except  Exception as e1:
+            self.LogErrorLine("Error parsing testcommand: " + str(e1))
+            return msgbody
+
+        if Register < 0 or Register > 16:
+            self.LogError("Testcommand supports commands 0 - 16")
+            return "Testcommand supports commands 0 - 16"
+
+        with self.ModBus.CommAccessLock:
+            #
+            LowByte = Value & 0x00FF
+            HighByte = Value >> 8
+            Data= []
+            Data.append(HighByte)           # Value for indexed register (High byte)
+            Data.append(LowByte)            # Value for indexed register (Low byte)
+
+            self.ModBus.ProcessMasterSlaveWriteTransaction("0004", len(Data) / 2, Data)
+
+            LowByte = Register & 0x00FF
+            HighByte = Register >> 8
+            Data= []
+            Data.append(HighByte)           # indexed register to be written (High byte)
+            Data.append(LowByte)            # indexed register to be written (Low byte)
+
+            self.ModBus.ProcessMasterSlaveWriteTransaction("0003", len(Data) / 2, Data)
+
+        return "Test command sent successfully"
 
     #----------  Evolution:SetGeneratorRemoteCommand--------------------------
     def SetGeneratorRemoteCommand(self, CmdString):
@@ -1550,7 +1634,7 @@ class Evolution(GeneratorController):
                 return
 
             if not self.InitComplete:
-                return 
+                return
 
             UtilityVoltsStr = self.GetUtilityVoltage()
             if not len(UtilityVoltsStr):
@@ -1663,6 +1747,9 @@ class Evolution(GeneratorController):
             msgsubject = ""
             msgbody = "\n"
 
+            if len(self.UserURL):
+                msgbody += "For additional information : " + self.UserURL + "\n"
+
             if self.SystemInAlarm():        # Update Alarm Status global flag, returns True if system in alarm
 
                 msgsubject += "Generator Alert at " + self.SiteName + ": "
@@ -1704,8 +1791,8 @@ class Evolution(GeneratorController):
             Maintenance["Maintenance"].append({"Generator Serial Number" : self.GetSerialNumber()})
             Maintenance["Maintenance"].append({"Controller" : self.GetController()})
             Maintenance["Maintenance"].append({"Nominal RPM" : self.NominalRPM})
-            Maintenance["Maintenance"].append({"Rated kW" : self.NominalKW})
-            Maintenance["Maintenance"].append({"Nominal Frequency" : self.NominalFreq})
+            Maintenance["Maintenance"].append({"Rated kW" : str(self.NominalKW) + " kW"})
+            Maintenance["Maintenance"].append({"Nominal Frequency" : str(self.NominalFreq) + " Hz"})
             Maintenance["Maintenance"].append({"Fuel Type" : self.FuelType})
             if self.FuelSensorSupported():
                 Maintenance["Maintenance"].append({"Fuel Level Sensor" : self.GetFuelSensor()})
@@ -1729,11 +1816,11 @@ class Evolution(GeneratorController):
                     self.RunHoursMonth = self.GetPowerHistory("power_log_json=43200,time")
 
                 if self.KWHoursMonth != None:
-                    Maintenance["Maintenance"].append({"kW Hours in last 30 days" : self.KWHoursMonth})
+                    Maintenance["Maintenance"].append({"kW Hours in last 30 days" : str(self.KWHoursMonth) + " kWh"})
                 if self.FuelMonth != None:
                     Maintenance["Maintenance"].append({"Fuel Consumption in last 30 days" : self.FuelMonth})
                 if self.RunHoursMonth != None:
-                    Maintenance["Maintenance"].append({"Run Hours in last 30 days" : self.RunHoursMonth})
+                    Maintenance["Maintenance"].append({"Run Hours in last 30 days" : str(self.RunHoursMonth) + " h"})
 
 
             ControllerSettings = []
@@ -1743,19 +1830,24 @@ class Evolution(GeneratorController):
                 ControllerSettings.append({"Calibrate Current 1" : self.GetParameter("05f6")})
                 ControllerSettings.append({"Calibrate Current 2" : self.GetParameter("05f7")})
 
-            ControllerSettings.append({"Calibrate Volts" : self.GetParameter("0208")})
+            if not self.PreNexus:
+                ControllerSettings.append({"Calibrate Volts" : self.GetParameter("0208")})
+
+            ControllerSettings.append({"Nominal Line Voltage" : str(self.GetModelInfo( "nominalvolts")) +  " V"})
+            ControllerSettings.append({"Rated Max Power" : str(self.GetModelInfo( "kw")) +  " kW"})
             if self.LiquidCooled:
 
                 ControllerSettings.append({"Param Group" : self.GetParameter("020a")})
                 ControllerSettings.append({"Voltage Code" : self.GetParameter("020b")})
+                ControllerSettings.append({"Phase" : self.GetLiquidCooledModelInfo( "phase")})
 
                 if self.EvolutionController and self.LiquidCooled:
                     # get total hours since activation
                     ControllerSettings.append({"Hours of Protection" : self.GetParameter("0054", Label = "H")})
                     ControllerSettings.append({"Volts Per Hertz" : self.GetParameter("020e")})
                     ControllerSettings.append({"Gain" : self.GetParameter("0235")})
-                    ControllerSettings.append({"Rated Frequency" : self.GetParameter("005a")})
-                    ControllerSettings.append({"Rated Voltage" : self.GetParameter("0059")})
+                    ControllerSettings.append({"Rated Frequency" : self.GetParameter("005a", Label = "Hz")})
+                    ControllerSettings.append({"Rated Voltage" : self.GetParameter("0059", Label = "V")})
 
             if not self.SmartSwitch:
                 Exercise = []
@@ -1786,8 +1878,10 @@ class Evolution(GeneratorController):
                 else:
                     Service.append({"Service A Due" : self.GetServiceDue("A") + " or " + self.GetServiceDueDate("A")})
                     Service.append({"Service B Due" : self.GetServiceDue("B") + " or " + self.GetServiceDueDate("B")})
+                    if not self.LiquidCooled:
+                        Service.append({"Battery Check Due" : self.GetServiceDueDate("BATTERY")})
 
-            Service.append({"Total Run Hours" : self.GetRunTimes()})
+            Service.append({"Total Run Hours" : self.GetRunHours()})
             Service.append({"Hardware Version" : self.GetHardwareVersion()})
             Service.append({"Firmware Version" : self.GetFirmwareVersion()})
 
@@ -1970,7 +2064,65 @@ class Evolution(GeneratorController):
 
         return RetValue
 
+    #----------  Evolution:ParsePreNexusLog-------------------------------------
+    # This function will parse log entries for Pre-Nexus models
+    # #     AABBCCDDEEFFGGHH
+    #       AA = log entry number
+    #       BB = Log Code - Unique Value for displayable string
+    #       CC = Hour
+    #       DD = minutes
+    #       EE = seconds
+    #       FF = Month
+    #       GG = Date
+    #       HH = year
+    #---------------------------------------------------------------------------
+    def ParsePreNexusLog(self, Value, LogBase = None):
 
+        # Nexus    14071b12090e1212
+        # PreNexus be040f2d0b031d13 = "03/29/19 15:45:11 RPM Sense Loss"
+
+        if len(Value) < 16:
+            self.LogError("Error in  ParsePreNexusLog length check (16)")
+            return None,None,None,None,None,None,None
+
+        TempVal = Value[10:12]
+        Month = int(TempVal, 16)
+        if Month == 0 or Month > 12:    # validate month
+            # This is the normal return path for an empty log entry
+            return None,None,None,None,None,None,None
+
+        TempVal = Value[6:8]
+        Min = int(TempVal, 16)
+        if Min >59:                     # validate minute
+            self.LogError("Error in  ParsePreNexusLog minutes check")
+            return None,None,None,None,None,None,None
+
+        TempVal = Value[4:6]
+        Hour = int(TempVal, 16)
+        if Hour > 23:                   # validate hour
+            self.LogError("Error in  ParsePreNexusLog hours check")
+            return None,None,None,None,None,None,None
+
+        # Seconds
+        TempVal = Value[8:10]
+        Seconds = int(TempVal, 16)
+        if Seconds > 59:
+            self.LogError("Error in  ParsePreNexusLog seconds check")
+            return None,None,None,None,None,None,None
+
+        TempVal = Value[12:14]
+        Day = int(TempVal, 16)
+        if Day == 0 or Day > 31:        # validate day
+            self.LogError("Error in  ParsePreNexusLog day check")
+            return None,None,None,None,None,None,None
+
+        TempVal = Value[14:16]
+        Year = int(TempVal, 16)         # year
+
+        TempVal = Value[2:4]            # this value represents a unique display string
+        LogCode = int(TempVal, 16)
+
+        return Month,Day,Year,Hour,Min, Seconds, LogCode
     #----------  Evolution:ParseLogEntry----------------------------------------
     #  Log Entries are in one of two formats, 16 (On off Log, Service Log) or
     #   20 chars (Alarm Log)
@@ -2129,46 +2281,52 @@ class Evolution(GeneratorController):
             self.LogError("Error in  ParseLogEntry length check (16)")
             return ""
 
-        if len(Value) > 20:
-            self.LogError("Error in  ParseLogEntry length check (20)")
-            return ""
+        if self.PreNexus:
+            Month,Day,Year,Hour,Min, Seconds, LogCode = self.ParsePreNexusLog( Value, LogBase = LogBase)
+            if Month == None:
+                self.LogError("Error in ParsePreNexusLog length check")
+                return ""
+        else:
+            if len(Value) > 20:
+                self.LogError("Error in  ParseLogEntry length check (20)")
+                return ""
 
-        TempVal = Value[8:10]
-        Month = int(TempVal, 16)
-        if Month == 0 or Month > 12:    # validate month
-            # This is the normal return path for an empty log entry
-            return ""
+            TempVal = Value[8:10]
+            Month = int(TempVal, 16)
+            if Month == 0 or Month > 12:    # validate month
+                # This is the normal return path for an empty log entry
+                return ""
 
-        TempVal = Value[4:6]
-        Min = int(TempVal, 16)
-        if Min >59:                     # validate minute
-            self.LogError("Error in  ParseLogEntry minutes check")
-            return ""
+            TempVal = Value[4:6]
+            Min = int(TempVal, 16)
+            if Min >59:                     # validate minute
+                self.LogError("Error in  ParseLogEntry minutes check")
+                return ""
 
-        TempVal = Value[6:8]
-        Hour = int(TempVal, 16)
-        if Hour > 23:                   # validate hour
-            self.LogError("Error in  ParseLogEntry hours check")
-            return ""
+            TempVal = Value[6:8]
+            Hour = int(TempVal, 16)
+            if Hour > 23:                   # validate hour
+                self.LogError("Error in  ParseLogEntry hours check")
+                return ""
 
-        # Seconds
-        TempVal = Value[10:12]
-        Seconds = int(TempVal, 16)
-        if Seconds > 59:
-            self.LogError("Error in  ParseLogEntry seconds check")
-            return ""
+            # Seconds
+            TempVal = Value[10:12]
+            Seconds = int(TempVal, 16)
+            if Seconds > 59:
+                self.LogError("Error in  ParseLogEntry seconds check")
+                return ""
 
-        TempVal = Value[14:16]
-        Day = int(TempVal, 16)
-        if Day == 0 or Day > 31:        # validate day
-            self.LogError("Error in  ParseLogEntry day check")
-            return ""
+            TempVal = Value[14:16]
+            Day = int(TempVal, 16)
+            if Day == 0 or Day > 31:        # validate day
+                self.LogError("Error in  ParseLogEntry day check")
+                return ""
 
-        TempVal = Value[12:14]
-        Year = int(TempVal, 16)         # year
+            TempVal = Value[12:14]
+            Year = int(TempVal, 16)         # year
 
-        TempVal = Value[0:2]            # this value represents a unique display string
-        LogCode = int(TempVal, 16)
+            TempVal = Value[0:2]            # this value represents a unique display string
+            LogCode = int(TempVal, 16)
 
         DecoderLookup = {}
 
@@ -2264,6 +2422,9 @@ class Evolution(GeneratorController):
         # Hex Register Values:  30 30 30 37 37 32 32 39 38 37 -> High part of each byte = 3, low part is SN
         #                       decode as s/n 0007722987
         # at present I am guessing that the 3 that is interleaved in this data is the line of gensets (air cooled may be 03?)
+
+        if self.PreNexus:
+            return "Unknown"
         RegStr = "%04x" % MODEL_REG
         Value = self.GetRegisterValueFromList(RegStr)       # Serial Number Register
         if len(Value) != 20:
@@ -2344,6 +2505,7 @@ class Evolution(GeneratorController):
          0x0d : "RPM Sense Loss",       #  Validate on Evolution, occurred when forcing RPM sense loss from manual start
          0x0f : "Change Oil & Filter",  #  Validate on Nexus AC
          0x10 : "Inspect Air Filter",   #  Validate on Nexus LC
+         0x12 : "Check for Service",    #  Validate on Nexus AC (Spark Plugs service due?)
          0x14 : "Check Battery",        #  Validate on Nexus, occurred when Check Battery Alarm
          0x1c : "Throttle Failure",     #  Validate on Nexus LC,
          0x1e : "Under Voltage",        #  Validate on EvoAC
@@ -2850,7 +3012,7 @@ class Evolution(GeneratorController):
             BaseStatus = self.GetBaseStatus()
             Voltage = self.GetVoltageOutput(ReturnInt = True)
             if Voltage > 100:     # only bounds check if the voltage is over 100V to give things a chance to stabalize
-                if CurrentOutput > ((float(self.NominalKW) * 1000) / 240) + 2 or CurrentOutput < 0:
+                if CurrentOutput > ((float(self.NominalKW) * 1000) / self.NominalLineVolts) + 2 or CurrentOutput < 0:
                     # if we are here, then the current is out of range.
                     if not self.EvolutionController  and not self.LiquidCooled and not BaseStatus == "EXERCISING":
                         msg = "Current Calculation: %f, CurrentFloat: %f, Divisor: %f, Offset %f, Debug: %s" % (CurrentOutput, CurrentFloat, Divisor, CurrentOffset, DebugInfo)
@@ -2858,7 +3020,7 @@ class Evolution(GeneratorController):
                     if CurrentOutput < 0:
                         CurrentOutput = 0
                     else:
-                        CurrentOutput = round((float(self.NominalKW) * 1000) / 240, 2)
+                        CurrentOutput = round((float(self.NominalKW) * 1000) / self.NominalLineVolts, 2)
             if ReturnFloat:
                 return CurrentOutput
 
@@ -3209,6 +3371,8 @@ class Evolution(GeneratorController):
     #------------ Evolution:GetServiceDueDate ----------------------------------
     def GetServiceDueDate(self, serviceType = "A"):
 
+        if self.EvolutionController == None or self.LiquidCooled == None:
+            return ""
         if self.PowerPact:
             return ""
         # Evolution Air Cooled Maintenance Message Intervals
@@ -3222,9 +3386,14 @@ class Evolution(GeneratorController):
         #Schedule C       1000 Hours
         ServiceTypeLookup_Evo = {
                                 "A" : "001b",
-                                "B" : "001f"
+                                "B" : "001f",
                                 }
 
+        ServiceTypeLookup_EvoAC = {
+                                "A" : "001b",
+                                "B" : "001f",
+                                "BATTERY" : "0022"
+                                }
         # Nexus Air Cooled Maintenance Message Intervals
         # Inspect Battery     1 Year
         #Change Oil & Filter  200 Hours or 2 years
@@ -3253,7 +3422,10 @@ class Evolution(GeneratorController):
                                 "AIR" : "001d",
                                 }
         if self.EvolutionController:
-            LookUp = ServiceTypeLookup_Evo
+            if self.LiquidCooled:
+                LookUp = ServiceTypeLookup_Evo
+            else:
+                LookUp = ServiceTypeLookup_EvoAC
         elif not self.LiquidCooled:
             LookUp = ServiceTypeLookup_Nexus_AC
         else:
@@ -3302,8 +3474,8 @@ class Evolution(GeneratorController):
         FloatTemp = IntTemp / 100.0
         return "V%2.2f" % FloatTemp     #
 
-    #------------ Evolution:GetRunTimes ----------------------------------------
-    def GetRunTimes(self):
+    #------------ Evolution:GetRunHours ----------------------------------------
+    def GetRunHours(self):
 
         try:
             RunHours = None
@@ -3480,10 +3652,12 @@ class Evolution(GeneratorController):
             StartInfo["FuelConsumption"] = self.FuelConsumptionSupported()
             StartInfo["UtilityVoltage"] = True
             StartInfo["RemoteCommands"] = not self.SmartSwitch
-            StartInfo["ResetAlarms"] = self.EvolutionController
+            StartInfo["ResetAlarms"] = self.EvolutionController and self.LiquidCooled
             StartInfo["AckAlarms"] = False
+            StartInfo["RemoteTransfer"] = self.EvolutionController
             StartInfo["RemoteButtons"] = self.RemoteButtonsSupported()
             StartInfo["ExerciseControls"] = not self.SmartSwitch
+            StartInfo["WriteQuietMode"] = True #self.EvolutionController
 
             if not NoTile:
                 StartInfo["pages"] = {
@@ -3492,6 +3666,7 @@ class Evolution(GeneratorController):
                                 "outage":True,
                                 "logs":True,
                                 "monitor": True,
+                                "maintlog" : True,
                                 "notifications": True,
                                 "settings": True,
                                 "addons": True,
