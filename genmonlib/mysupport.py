@@ -13,6 +13,8 @@ import os, sys, time, collections, threading, socket, json
 
 from genmonlib.myplatform import MyPlatform
 from genmonlib.mycommon import MyCommon
+from genmonlib.myconfig import MyConfig
+from genmonlib.program_defaults import ProgramDefaults
 
 #------------ MySupport class --------------------------------------------------
 class MySupport(MyCommon):
@@ -38,6 +40,35 @@ class MySupport(MyCommon):
         except Exception as e1:
             self.LogError("Error in  LogToFile : File: %s: %s " % (File,str(e1)))
 
+    #------------ MySupport::CopyFile-------------------------------------------
+    @staticmethod
+    def CopyFile(source, destination, move = False, log = None):
+
+        try:
+            if not os.path.isfile(source):
+                if log != None:
+                    log.error("Error in CopyFile : source file not found.")
+                return False
+
+            path = os.path.dirname(destination)
+            if not os.path.isdir(path):
+                if log != None:
+                    log.error("Creating " + path)
+                os.mkdir(path)
+            with os.fdopen(os.open(source, os.O_RDONLY ),'r') as source_fd:
+                data = source_fd.read()
+                with os.fdopen(os.open(destination,os.O_CREAT | os.O_RDWR ),'w') as dest_fd:
+                    dest_fd.write(data)
+                    dest_fd.flush()
+                    os.fsync(dest_fd)
+
+            if move:
+                os.remove(source)
+            return True
+        except Exception as e1:
+            if log != None:
+                log.error("Error in CopyFile : " + str(source) + " : "+ str(e1))
+            return False
     #------------ MySupport::GetSiteName----------------------------------------
     def GetSiteName(self):
         return self.SiteName
@@ -52,7 +83,7 @@ class MySupport(MyCommon):
             #create an INET, STREAMing socket
             Socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             #now connect to the server on our port
-            Socket.connect(("127.0.0.1", self.ServerSocketPort))
+            Socket.connect((ProgramDefaults.LocalHost, self.ServerSocketPort))
             Socket.close()
             return True
         except Exception as e1:
@@ -320,3 +351,16 @@ class MySupport(MyCommon):
         delta_minutes = (seconds % 3600) // 60
 
         return (delta_hours * 60 + delta_minutes)
+
+    #---------------------MyCommon::GetGenmonInitInfo---------------------------
+    @staticmethod
+    def GetGenmonInitInfo(configfilepath = MyCommon.DefaultConfPath, log = None):
+
+        if configfilepath == None or configfilepath == "":
+            configfilepath = MyCommon.DefaultConfPath
+
+        config = MyConfig(configfilepath + "genmon.conf", section = "GenMon", log = log)
+        loglocation = config.ReadValue('loglocation', default = ProgramDefaults.LogPath)
+        port = config.ReadValue('server_port', return_type = int, default = ProgramDefaults.ServerPort)
+
+        return port, loglocation

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #-------------------------------------------------------------------------------
 #    FILE: genexercise.py
-# PURPOSE: genexercise.py add enhanced exercise functionality for Evolution cotrollers
+# PURPOSE: genexercise.py add enhanced exercise functionality for Evolution and Nexus cotrollers
 #
 #  AUTHOR: jgyates
 #    DATE: 02-23-2019
@@ -11,7 +11,7 @@
 
 
 import datetime, time, sys, signal, os, threading, collections, json, ssl
-import atexit
+import atexit, getopt
 
 try:
     from genmonlib.myclient import ClientInterface
@@ -20,6 +20,7 @@ try:
     from genmonlib.mysupport import MySupport
     from genmonlib.mycommon import MyCommon
     from genmonlib.mythread import MyThread
+    from genmonlib.program_defaults import ProgramDefaults
 
 except Exception as e1:
     print("\n\nThis program requires the modules located in the genmonlib directory in the github repository.\n")
@@ -31,23 +32,29 @@ except Exception as e1:
 class GenExercise(MySupport):
 
     #------------ GenExercise::init---------------------------------------------
-    def __init__(self):
+    def __init__(self,
+        log = None,
+        loglocation = ProgramDefaults.LogPath,
+        ConfigFilePath = MyCommon.DefaultConfPath,
+        host = ProgramDefaults.LocalHost,
+        port = ProgramDefaults.ServerPort):
+
         super(GenExercise, self).__init__()
 
-        self.LogFileName = "/var/log/genexercise.log"
+        self.LogFileName = loglocation + "genexercise.log"
         self.AccessLock = threading.Lock()
         # log errors in this module to a file
         self.log = SetupLogger("genexercise", self.LogFileName)
 
         self.console = SetupLogger("genexercise_console", log_file = "", stream = True)
 
-        self.MonitorAddress = "127.0.0.1"
+        self.MonitorAddress = host
         self.PollTime =  2
         self.ExerciseActive = False
         self.Debug = False
 
         try:
-            self.config = MyConfig(filename = '/etc/genexercise.conf', section = 'genexercise', log = self.log)
+            self.config = MyConfig(filename = ConfigFilePath + 'genexercise.conf', section = 'genexercise', log = self.log)
 
             self.ExerciseType = self.config.ReadValue('exercise_type', default = "Normal")
             self.ExerciseHour = self.config.ReadValue('exercise_hour', return_type = int, default = 12)
@@ -57,7 +64,7 @@ class GenExercise(MySupport):
             self.ExerciseDuration = self.config.ReadValue('exercise_duration', return_type = float, default = 12)
             self.ExerciseWarmup = self.config.ReadValue('exercise_warmup', return_type = float, default = 0)
             self.ExerciseFrequency = self.config.ReadValue('exercise_frequency',  default = "Monthly")
-            self.MonitorAddress = self.config.ReadValue('monitor_address', default = "127.0.0.1")
+            self.MonitorAddress = self.config.ReadValue('monitor_address', default = ProgramDefaults.LocalHost)
             self.LastExerciseTime = self.config.ReadValue('last_exercise',  default = None)
             self.UseGeneratorTime = self.config.ReadValue('use_gen_time',  return_type = bool, default = False)
             self.Debug = self.config.ReadValue('debug', return_type = bool, default = False)
@@ -85,11 +92,11 @@ class GenExercise(MySupport):
                 self.ExerciseFrequency = "Monthly"
 
             if self.MonitorAddress == None or not len(self.MonitorAddress):
-                self.MonitorAddress = "127.0.0.1"
+                self.MonitorAddress = ProgramDefaults.LocalHost
 
         except Exception as e1:
-            self.LogErrorLine("Error reading /etc/genexercise.conf: " + str(e1))
-            self.console.error("Error reading /etc/genexercise.conf: " + str(e1))
+            self.LogErrorLine("Error reading " + ConfigFilePath + "genexercise.conf: " + str(e1))
+            self.console.error("Error reading " + ConfigFilePath + "genexercise.conf: " + str(e1))
             sys.exit(1)
 
         try:
@@ -98,7 +105,7 @@ class GenExercise(MySupport):
                 startcount = 0
                 while startcount <= 10:
                     try:
-                        self.Generator = ClientInterface(host = self.MonitorAddress, log = self.log)
+                        self.Generator = ClientInterface(host = self.MonitorAddress, port = port, log = self.log)
                         break
                     except Exception as e1:
                         startcount += 1
@@ -129,8 +136,7 @@ class GenExercise(MySupport):
                 self.LogError("Execise: " + self.ExerciseType + ", " + self.ExerciseFrequency + " at "
                     + str(self.ExerciseHour) + ":" + str(self.ExerciseMinute) + " on " + DayStr + " for "
                     + str(self.ExerciseDuration) + " min. Warmup: " + str(self.ExerciseWarmup))
-                if self.Debug:
-                    self.LogError("Debug Enabled")
+                self.DebugOutput("Debug Enabled")
             except Exception as e1:
                 self.LogErrorLine(str(e1))
             atexit.register(self.Close)
@@ -163,8 +169,8 @@ class GenExercise(MySupport):
             data = self.SendCommand("generator: start_info_json")
             StartInfo = {}
             StartInfo = json.loads(data)
-            if not "evolution" in StartInfo["Controller"].lower():
-                self.LogError("Error: Only Evolution Controllers is supported for this feature: " + StartInfo["Controller"])
+            if not "evolution" in StartInfo["Controller"].lower() and not "nexus" in StartInfo["Controller"].lower():
+                self.LogError("Error: Only Evolution or Nexus controllers are supported for this feature: " + StartInfo["Controller"])
                 return False
             return True
         except Exception as e1:
@@ -182,7 +188,7 @@ class GenExercise(MySupport):
             return
 
         self.SendCommand("generator: setremote=starttransfer")
-        self.LogError("Starting transfer exercise cycle (post warmup).")
+        self.DebugOutput("Starting transfer exercise cycle (post warmup).")
         # set timer to stop
         self.StopTimer = threading.Timer(float(self.ExerciseDuration  * 60.0), self.StopExercise)
         self.StopTimer.start()
@@ -205,25 +211,23 @@ class GenExercise(MySupport):
         # Start generator
         if self.ExerciseType.lower() == "normal" and self.ReadyToExercise():
             self.SendCommand("generator: setremote=start")
-            if self.Debug:
-                self.LogError("Starting normal exercise cycle.")
+            self.DebugOutput("Starting normal exercise cycle.")
             self.StopTimer = threading.Timer(float(self.ExerciseDuration  * 60.0), self.StopExercise)
             self.StopTimer.start()
         elif self.ExerciseType.lower() == "quiet" and self.ReadyToExercise():
             self.SendCommand("generator: setremote=startexercise")
-            if self.Debug:
-                self.LogError("Starting quiet exercise cycle.")
+            self.DebugOutput("Starting quiet exercise cycle.")
             self.StopTimer = threading.Timer(float(self.ExerciseDuration  * 60.0), self.StopExercise)
             self.StopTimer.start()
         elif self.ExerciseType.lower() == "transfer" and self.ReadyToExercise():
             if self.ExerciseWarmup == 0:
                 self.SendCommand("generator: setremote=starttransfer")
-                if self.Debug:
-                    self.LogError("Starting transfer exercise cycle.")
+                self.DebugOutput("Starting transfer exercise cycle.")
+                self.StopTimer = threading.Timer(float(self.ExerciseDuration  * 60.0), self.StopExercise)
+                self.StopTimer.start()
             else:
                 self.SendCommand("generator: setremote=start")
-                if self.Debug:
-                    self.LogError("Starting warmup for transfer exercise cycle.")
+                self.DebugOutput("Starting warmup for transfer exercise cycle.")
                 # start timer for post warmup transition to starttransfer command
                 self.WarmupTimer = threading.Timer(float(self.ExerciseWarmup  * 60.0), self.PostWarmup)
                 self.WarmupTimer.start()
@@ -238,9 +242,16 @@ class GenExercise(MySupport):
 
         if self.ExerciseActive:
             self.SendCommand("generator: setremote=stop")
-            if self.Debug:
-                self.LogError("Stopping exercise cycle.")
+            self.DebugOutput("Stopping exercise cycle.")
             self.ExerciseActive = False
+        else:
+            self.DebugOutput("Calling Stop Exercise (not needed)")
+
+    # ---------- GenExercise::DebugOutput-----------------------------
+    def DebugOutput(self, Message):
+
+        if self.Debug:
+            self.LogError(Message)
 
     # ---------- GenExercise::WriteLastExerciseTime-----------------------------
     def WriteLastExerciseTime(self):
@@ -250,8 +261,7 @@ class GenExercise(MySupport):
             if self.ExerciseFrequency.lower() == "biweekly":
                 self.config.WriteValue("last_exercise", NowString)
                 self.config.LastExerciseTime = NowString
-            if self.Debug:
-                self.LogError("Last Exercise Cycle: " + NowString)
+            self.DebugOutput("Last Exercise Cycle: " + NowString)
         except Exception as e1:
             self.LogErrorLine("Error in WriteLastExerciseTime: " + str(e1))
 
@@ -291,29 +301,31 @@ class GenExercise(MySupport):
     # ---------- GenExercise::GetGeneratorTime----------------------------------
     def GetGeneratorTime(self):
         try:
+            GenTimeStr = ""
             data = self.SendCommand("generator: status_json")
             Status = {}
             Status = json.loads(data)
             TimeDict = self.FindDictValueInListByKey("Time", Status["Status"])
             if TimeDict != None:
                 TimeDictStr = self.FindDictValueInListByKey("Generator Time", TimeDict)
-                if TimeDictStr != None:
+                if TimeDictStr != None or not len(TimeDictStr):
                     GenTimeStr = TimeDictStr
-                    # Format is "Wednesday March 6, 2019 13:10"
+                    # Format is "Wednesday March 6, 2019 13:10" or " "Friday May 3, 2019 11:11"
                     GenTime = datetime.datetime.strptime(GenTimeStr, "%A %B %d, %Y %H:%M")
                 else:
-                    self.LogError("Error getting generator time!")
+                    self.LogError("Error getting generator time! Genmon may be starting up.")
                     GenTime = datetime.datetime.now()
             else:
                 self.LogError("Error getting generator time (2)!")
                 GenTime = datetime.datetime.now()
             return GenTime
         except Exception as e1:
-            self.LogErrorLine("Error in GetGeneratorTime: " + str(e1))
+            self.LogErrorLine("Error in GetGeneratorTime: " + str(e1) + ": " + GenTimeStr)
             return datetime.datetime.now()
     # ---------- GenExercise::ExerciseThread------------------------------------
     def ExerciseThread(self):
 
+        time.sleep(1)
         while True:
             try:
                 if not self.ExerciseActive:
@@ -342,18 +354,38 @@ class GenExercise(MySupport):
             self.StopExercise()
         self.Generator.Close()
 #-------------------------------------------------------------------------------
-def Main():
+if __name__ == "__main__":
 
+    console = SetupLogger("genexerciselog_console", log_file = "", stream = True)
+    HelpStr = '\nsudo python genexercise.py -a <IP Address or localhost> -c <path to genmon config file>\n'
     if os.geteuid() != 0:
-        print("\nYou need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting.\n")
+        console.error("\nYou need to have root privileges to run this script.\nPlease try again, this time using 'sudo'. Exiting.\n")
         sys.exit(2)
 
-    GenExerciseInstance = GenExercise()
+    try:
+        ConfigFilePath = ProgramDefaults.ConfPath
+        address = ProgramDefaults.LocalHost
+        opts, args = getopt.getopt(sys.argv[1:],"hc:a:",["help","configpath=","address="])
+    except getopt.GetoptError:
+        console.error("Invalid command line argument.")
+        sys.exit(2)
+
+    for opt, arg in opts:
+        if opt == '-h':
+            console.error(HelpStr)
+            sys.exit()
+        elif opt in ("-a", "--address"):
+            address = arg
+        elif opt in ("-c", "--configpath"):
+            ConfigFilePath = arg
+            ConfigFilePath = ConfigFilePath.strip()
+
+    port, loglocation = MySupport.GetGenmonInitInfo(ConfigFilePath, log = console)
+    log = SetupLogger("client", loglocation + "genexercise.log")
+
+    GenExerciseInstance = GenExercise(log = log, loglocation = loglocation, ConfigFilePath = ConfigFilePath, host = address, port = port)
 
     while True:
         time.sleep(0.5)
 
     sys.exit(1)
-#-------------------------------------------------------------------------------
-if __name__ == "__main__":
-    Main()

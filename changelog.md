@@ -1,6 +1,43 @@
 # Changelog
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
 
+## V1.13.11 - 2019-05-20
+- Fix that will hopefully correct issues when upgrading from 1.13.07 or earlier
+
+## V1.13.10 - 2019-05-19
+- Increased delay when copying files during upgrades from 1.13.07 or earlier. This should not effect upgrades that are after V1.13.07
+
+## V1.13.09 - 2019-05-12
+- Created delay after file copy to allow file to settle before restarting on first restart after upgrade.
+
+## V1.13.08 - 2019-05-08
+- To be extra safe, please perform a backup on your data before installing the update as some files will be moved during the upgrade
+- Added alarm codes for Nexus
+- Update to support multiple genmon instances
+- move all working copies of conf files from /etc/ to /etc/genmon/
+- moved kwlog.txt, outage.txt and service journal data file from ./genmon to /etc/genmon/
+- Added new command line options to most programs to pass in full path to config files
+- Added TCP port command line option to ClientInterface.py
+- updates to the wiki
+- modified command line options for genmonmaint.sh to support alternate config locations. See https://github.com/jgyates/genmon/wiki/1----Software-Overview#genmonmaintsh for details
+
+## V1.13.07 - 2019-05-03
+- Fixed bug in genexercise.py that prevented a "Start/Transfer" exercise cycle from stoping
+
+## V1.13.06 - 2019-05-03
+- Fixed problem with Nexus controllers not properly showing "Start and Transfer" button in web interface
+- Modified Enhanced Exercise add on program to support Nexus controllers
+
+## V1.13.05 - 2019-05-03
+- Corrected typo in gengpio.py
+- Added additional error checking in genmon.js
+
+## V1.13.04 - 2019-05-01
+- Corrected display anomaly in web UI
+
+## V1.13.03 - 2019-04-30
+- Removed the ability to set quiet mode for Nexus and Air Cooled Evolution as this does not appear to be supported in the firmware.
+s
 ## V1.13.02 - 2019-04-26
 - Improved startup error handling to better respond if there are serial issues preventing the software from identifying the controller
 
@@ -21,7 +58,7 @@ All notable changes to this project will be documented in this file. Major relea
 ## V1.12.31 - 2019-03-29
 - Added more register reads in H and G Panel controller (need register submissions to complete adding more data to UI)
 - Corrected bug in /OtherApps/modbusdump.py
-- Update for 2008 model Pre-Nexus controllers (i.e. made in 2008 and do not have Nexus printed on them). Previously these controllers were not supported. See https://github.com/jgyates/genmon/wiki/Appendix-4-Known-Issues item 6 for more details.
+- Update for 2008 model Pre-Nexus controllers (i.e. made in 2008 and do not have Nexus printed on them). Previously these controllers were not supported. See https://github.com/jgyates/genmon/wiki/Appendix-D-Known-Issues item 6 for more details.
 
 ## V1.12.30 - 2019-03-20
 - H and G Panel update to address log responsiveness
@@ -195,7 +232,7 @@ All notable changes to this project will be documented in this file. Major relea
 - Corrected potential problem with a warning email about the power log being sent multiple times
 
 ## V1.11.20 - 2018-11-06
-- Updated current calculation algorithm for Evolution Liquid Cooled. See https://github.com/jgyates/genmon/wiki/Appendix-4-Known-Issues for additional details.
+- Updated current calculation algorithm for Evolution Liquid Cooled. See https://github.com/jgyates/genmon/wiki/Appendix-D-Known-Issues for additional details.
 
 ## V1.11.19 - 2018-10-31
 - Added email notice when communications with controller has been lost (and restored)
@@ -291,5 +328,5 @@ All notable changes to this project will be documented in this file. Major relea
 - Added program genslack.py. This program will send notifications via the [Slack](www.slack.com) messaging service. Thanks @naterenbarger for this addition.
 - Updated install script to support all add-on program library requirements
 - Added support for Evolution 2.0
-- Added support for serial over TCP/IP (additional hardware required) See [this page for details](https://github.com/jgyates/genmon/wiki/Appendix-6----Serial-over-IP)
+- Added support for serial over TCP/IP (additional hardware required) See [this page for details](https://github.com/jgyates/genmon/wiki/Appendix-F----Serial-over-IP)
 - Added advanced Modbus error handling for H-100 controllers
