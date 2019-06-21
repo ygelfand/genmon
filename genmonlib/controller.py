@@ -57,7 +57,7 @@ class GeneratorController(MySupport):
         self.MaintLogList = []
         self.MaintLock = threading.RLock()
         self.OutageLog = ConfigFilePath + "outage.txt"
-        self.PowerLogMaxSize = 15       # 15 MB max size
+        self.PowerLogMaxSize = 15.0       # 15 MB max size
         self.PowerLog =  ConfigFilePath + "kwlog.txt"
         self.PowerLogList = []
         self.PowerLock = threading.RLock()
@@ -66,6 +66,7 @@ class GeneratorController(MySupport):
         self.RunHoursMonth = None
         self.LastHouseKeepingTime = None
         self.TileList = []        # Tile list for GUI
+        self.TankData = None
 
         self.UtilityVoltsMin = 0    # Minimum reported utility voltage above threshold
         self.UtilityVoltsMax = 0    # Maximum reported utility voltage above pickup
@@ -80,6 +81,7 @@ class GeneratorController(MySupport):
         self.Model = "Unknown"
         self.EngineDisplacement = "Unknown"
         self.TankSize = 0
+        self.UseExternalFuelData = False
 
         self.ProgramStartTime = datetime.datetime.now()     # used for com metrics
         self.OutageStartTime = self.ProgramStartTime        # if these two are the same, no outage has occured
@@ -95,6 +97,7 @@ class GeneratorController(MySupport):
                 self.bDisablePowerLog = self.config.ReadValue('disablepowerlog', return_type = bool, default = False)
                 self.SubtractFuel = self.config.ReadValue('subtractfuel', return_type = float, default = 0.0)
                 self.UserURL = self.config.ReadValue('user_url',  default = "").strip()
+                self.UseExternalFuelData = self.config.ReadValue('use_external_fuel_data', return_type = bool, default = False)
 
                 if self.config.HasOption('outagelog'):
                     self.OutageLog = self.config.ReadValue('outagelog')
@@ -102,7 +105,7 @@ class GeneratorController(MySupport):
                 if self.config.HasOption('kwlog'):
                     self.PowerLog = self.config.ReadValue('kwlog')
 
-                self.PowerLogMaxSize = self.config.ReadValue('kwlogmax', return_type = int, default = 15)
+                self.PowerLogMaxSize = self.config.ReadValue('kwlogmax', return_type = float, default = 15.0)
 
                 if self.config.HasOption('nominalfrequency'):
                     self.NominalFreq = self.config.ReadValue('nominalfrequency')
@@ -713,6 +716,18 @@ class GeneratorController(MySupport):
         except Exception as e1:
             self.LogErrorLine("Error in LogToPowerLog: " + str(e1))
 
+    #------------ GeneratorController::GetPowerLogFileDetails-------------------
+    def GetPowerLogFileDetails(self):
+
+        if not self.PowerMeterIsSupported():
+            return "Not Supported"
+        try:
+            LogSize = os.path.getsize(self.PowerLog)
+            outstr = "%.2f MB of %.2f MB" %((float(LogSize) / (1024.0*1024.0)), self.PowerLogMaxSize )
+            return outstr
+        except Exception as e1:
+            self.LogErrorLine("Error in GetPowerLogFileDetails : " + str(e1))
+            return "Unknown"
     #------------ GeneratorController::PrunePowerLog----------------------------
     def PrunePowerLog(self, Minutes):
 
@@ -726,8 +741,12 @@ class GeneratorController(MySupport):
             LogSize = os.path.getsize(self.PowerLog)
 
             if float(LogSize) / (1024*1024) >= self.PowerLogMaxSize * 0.98:
-                msgbody = "The kwlog file size is 98% of the maximum. Once the log reaches 100% of the log will be reset."
-                self.MessagePipe.SendMessage("Notice: Log file size warning" , msgbody, msgtype = "warn", onlyonce = True)
+                msgbody = "The genmon kwlog (power log) file size is 98 percent of the maximum. Once "
+                msgbody += "the log reaches 100 percent of the log will be reset. This will result "
+                msgbody += "inaccurate fuel estimation (if you are using this feature). You can  "
+                msgbody += "either increase the size of the kwlog on the advanced settings page,"
+                msgbody += "or reset your power log."
+                self.MessagePipe.SendMessage("Notice: Power Log file size warning" , msgbody, msgtype = "warn", onlyonce = True)
 
             # is the file size too big?
             if float(LogSize) / (1024*1024) >= self.PowerLogMaxSize:
@@ -1205,6 +1224,46 @@ class GeneratorController(MySupport):
     #----------  GeneratorController::GetFuelConsumptionPolynomial--------------
     def GetFuelConsumptionPolynomial(self):
         return None
+    #----------  GeneratorController::ExternalFuelDataSupported-----------------
+    def ExternalFuelDataSupported(self):
+        return self.UseExternalFuelData
+    #----------  GeneratorController::GetExternalFuelPercentage-----------------
+    def GetExternalFuelPercentage(self, ReturnFloat = False):
+
+        try:
+            if ReturnFloat:
+                DefaultReturn = 0.0
+            else:
+                DefaultReturn = "0"
+
+            if not self.ExternalFuelDataSupported():
+                return DefaultReturn
+
+            if self.TankData != None:
+                percentage =  self.TankData["Percentage"]
+                if ReturnFloat:
+                    return float(percentage)
+                else:
+                    return str(percentage)
+            else:
+                return DefaultReturn
+        except Exception as e1:
+            self.LogErrorLine("Error in GetExternalFuelPercentage: " + str(e1))
+            return DefaultReturn
+    #----------  GeneratorController::SetExternalTankData-----------------------
+    def SetExternalTankData(self, command):
+
+        try:
+            CmdList = command.split("=")
+            if len(CmdList) == 2:
+                self.TankData = json.loads(CmdList[1])
+            else:
+                self.LogError("Error in  SetExternalTankData: invalid input")
+                return "Error"
+        except Exception as e1:
+            self.LogErrorLine("Error in SetExternalTankData: " + str(e1))
+            return "Error"
+        return "OK"
     #----------  GeneratorController::AddEntryToMaintLog------------------------
     def AddEntryToMaintLog(self, EntryString):
 

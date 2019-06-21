@@ -1,6 +1,31 @@
 # Changelog
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
 
+## V1.13.18 - 2019-06-19
+- Fixed problem in gentankutil.py
+
+## V1.13.17 - 2019-06-19
+- Added support for external fuel tank API for tankutility.com propane fuel monitor
+
+## V1.13.16 - 2019-06-16
+- Changed warning message when power log is reaching size limit
+- Displayed estimated fuel on the Maintenance page on EvoLC diesel units that support fuel sensor
+- Added power log file size details to Monitor page
+
+## V1.13.15 - 2019-06-15
+- Corrected problem logging with gengpioin.py
+
+## V1.13.14 - 2019-06-14
+- Corrected problem with gengpioin.py and gengpio.py that were introduced in V1.13.08
+
+## V1.13.13 - 2019-06-11
+- Updated default values for current calculation for Evolution Liquid Cooled
+- Added option in serial library for seven data bits (current unused in this project)
+- Corrected minor issue in mail library when used in stand alone mode
+
+## V1.13.12 - 2019-05-22
+- Added low bandwidth page: http://IPADDRESS:8000/low
+
 ## V1.13.11 - 2019-05-20
 - Fix that will hopefully correct issues when upgrading from 1.13.07 or earlier
 

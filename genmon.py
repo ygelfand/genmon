@@ -34,7 +34,7 @@ except Exception as e1:
     print("Error: " + str(e1))
     sys.exit(2)
 
-GENMON_VERSION = "V1.13.11"
+GENMON_VERSION = "V1.13.18"
 
 #------------ Monitor class ----------------------------------------------------
 class Monitor(MySupport):
@@ -396,7 +396,7 @@ class Monitor(MySupport):
                 "mymodbus.log", "gengpio.log", "gengpioin.log", "gensms.log",
                 "gensms_modem.log", "genmqtt.log", "genpushover.log", "gensyslog.log",
                 "genloader.log", "myserialtcp.log", "genlog.log", "genslack.log",
-                "genexercise.log","genemail2sms.log"]
+                "genexercise.log","genemail2sms.log", "gentankdata.log"]
             for File in FilesToSend:
                 LogFile = self.LogLocation + File
                 if os.path.isfile(LogFile):
@@ -504,7 +504,8 @@ class Monitor(MySupport):
             "readregvalue"      : [self.Controller.ReadRegValue, (command.lower(),), True],    # only used for debug purposes, Read Register Non Cached
             "getdebug"          : [self.GetDeadThreadName, (), True],           # only used for debug purposes. If a thread crashes it tells you the thread name
             "sendregisters"     : [self.SendSupportInfo, (False,), True],
-            "sendlogfiles"      : [self.SendSupportInfo, (True,), True]
+            "sendlogfiles"      : [self.SendSupportInfo, (True,), True],
+            "set_tank_data"     : [self.Controller.SetExternalTankData, (command,), True]
         }
 
         CommandList = command.split(' ')
@@ -667,6 +668,8 @@ class Monitor(MySupport):
             GenMonStats.append({"Controller" : self.Controller.GetController(Actual = False)})
 
             GenMonStats.append({"Run time" : self.GetProgramRunTime()})
+            if self.Controller.PowerMeterIsSupported():
+                GenMonStats.append({"Power log file size" : self.Controller.GetPowerLogFileDetails()})
             GenMonStats.append({"Generator Monitor Version" : GENMON_VERSION})
 
             if not self.bDisablePlatformStats:
