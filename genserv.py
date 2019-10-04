@@ -66,20 +66,9 @@ console = None
 AppPath = ""
 favicon = "favicon.ico"
 ConfigFilePath = ProgramDefaults.ConfPath
-MAIL_CONFIG = ConfigFilePath + "mymail.conf"
+
 MAIL_SECTION = "MyMail"
-GENMON_CONFIG = ConfigFilePath + "genmon.conf"
 GENMON_SECTION = "GenMon"
-GENLOADER_CONFIG = ConfigFilePath + "genloader.conf"
-GENSMS_CONFIG = ConfigFilePath + "gensms.conf"
-MYMODEM_CONFIG = ConfigFilePath + "mymodem.conf"
-GENPUSHOVER_CONFIG = ConfigFilePath + "genpushover.conf"
-GENMQTT_CONFIG = ConfigFilePath + "genmqtt.conf"
-GENSLACK_CONFIG = ConfigFilePath + "genslack.conf"
-GENGPIOIN_CONFIG = ConfigFilePath + "gengpioin.conf"
-GENEXERCISE_CONFIG = ConfigFilePath + "genexercise.conf"
-GENEMAIL2SMS_CONFIG = ConfigFilePath + "genemail2sms.conf"
-GENTANKUTIL_CONFIG = ConfigFilePath + "gentankutil.conf"
 
 Closing = False
 Restarting = False
@@ -87,7 +76,17 @@ ControllerType = "generac_evo_nexus"
 CriticalLock = threading.Lock()
 CachedToolTips = {}
 CachedRegisterDescriptions = {}
-
+#-------------------------------------------------------------------------------
+@app.route('/logout')
+def logout():
+    try:
+        # remove the session data
+        if HTTPAuthUser != None and HTTPAuthPass != None:
+            session['logged_in'] = False
+            session['write_access'] = False
+        return root()
+    except Exception as e1:
+        LogError("Error on logout: " + str(e1))
 #-------------------------------------------------------------------------------
 @app.after_request
 def add_header(r):
@@ -203,9 +202,10 @@ def ProcessCommand(command):
                     if setlogstr:
                         finalcommand += "=" + setlogstr
                 if command == "add_maint_log":
-                    addlogstr = request.args.get('add_maint_log', 0, type=str)
-                    if addlogstr:
-                        finalcommand += "=" + addlogstr
+                    # use direct method instead of request.args.get due to unicoode
+                    # input for add_maint_log for international users
+                    input = request.args['add_maint_log']
+                    finalcommand += "=" + input
 
                 data = MyClientInterface.ProcessMonitorCommand(finalcommand)
 
@@ -750,7 +750,7 @@ def GetAddOns():
         AddOnCfg['gentankutil']['enable'] = ConfigFiles[GENLOADER_CONFIG].ReadValue("enable", return_type = bool, section = "gentankutil", default = False)
         AddOnCfg['gentankutil']['title'] = "External Tank Fuel Monitor"
         AddOnCfg['gentankutil']['description'] = "Integrates tankutility.com propane tank sensor data"
-        AddOnCfg['gentankutil']['icon'] = "Genmon"
+        AddOnCfg['gentankutil']['icon'] = "tankutility"
         AddOnCfg['gentankutil']['url'] = "https://github.com/jgyates/genmon/wiki/1----Software-Overview#gentankutilpy-optional"
         AddOnCfg['gentankutil']['parameters'] = collections.OrderedDict()
 
@@ -779,6 +779,21 @@ def GetAddOns():
             bounds = 'number',
             display_name = "Poll Frequency")
 
+        #GENALEXA
+        AddOnCfg['genalexa'] = collections.OrderedDict()
+        AddOnCfg['genalexa']['enable'] = ConfigFiles[GENLOADER_CONFIG].ReadValue("enable", return_type = bool, section = "genalexa", default = False)
+        AddOnCfg['genalexa']['title'] = "Amazon Alexa voice commands"
+        AddOnCfg['genalexa']['description'] = "Allow Amazon Alexa to start and stop the generator"
+        AddOnCfg['genalexa']['icon'] = "alexa"
+        AddOnCfg['genalexa']['url'] = "https://github.com/jgyates/genmon/wiki/1----Software-Overview#genalexapy-optional"
+        AddOnCfg['genalexa']['parameters'] = collections.OrderedDict()
+
+        AddOnCfg['genalexa']['parameters']['name'] = CreateAddOnParam(
+            ConfigFiles[GENALEXA_CONFIG].ReadValue("name", return_type = str, default = ""),
+            'string',
+            "Name to call the generator device, i.e. 'generator'",
+            bounds = 'minmax:4:50',
+            display_name = "Name for generator device")
     except Exception as e1:
         LogErrorLine("Error in GetAddOns: " + str(e1))
 
@@ -844,7 +859,8 @@ def SaveAddOnSettings(query_string):
             "gengpioin" : ConfigFiles[GENGPIOIN_CONFIG],
             "genexercise" : ConfigFiles[GENEXERCISE_CONFIG],
             "genemail2sms" : ConfigFiles[GENEMAIL2SMS_CONFIG],
-            "gentankutil" : ConfigFiles[GENTANKUTIL_CONFIG]
+            "gentankutil" : ConfigFiles[GENTANKUTIL_CONFIG],
+            "genalexa" : ConfigFiles[GENALEXA_CONFIG]
         }
 
         for module, entries in settings.items():   # module
@@ -1027,6 +1043,7 @@ def ReadAdvancedSettingsFromFile():
         ConfigSettings["controllertype"] = ['list', 'Controller Type', 8, "generac_evo_nexus", "", "generac_evo_nexus,h_100", GENMON_CONFIG, GENMON_SECTION, "controllertype"]
         ConfigSettings["loglocation"] = ['string', 'Log Directory',9, ProgramDefaults.LogPath, "", "required UnixDir", GENMON_CONFIG, GENMON_SECTION, "loglocation"]
         ConfigSettings["enabledebug"] = ['boolean', 'Enable Debug', 10, False, "", 0, GENMON_CONFIG, GENMON_SECTION, "enabledebug"]
+        ConfigSettings["ignore_unknown"] = ['boolean', 'Ignore Unknown Values', 10, False, "", 0, GENMON_CONFIG, GENMON_SECTION, "ignore_unknown"]
         # These settings are not displayed as the auto-detect controller will set these
         # these are only to be used to override the auto-detect
         #ConfigSettings["uselegacysetexercise"] = ['boolean', 'Use Legacy Exercise Time', 9, False, "", 0, GENMON_CONFIG, GENMON_SECTION, "uselegacysetexercise"]
@@ -1038,12 +1055,16 @@ def ReadAdvancedSettingsFromFile():
         ConfigSettings["additionalrunhours"] = ['string', 'Additional Run Hours', 14, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "additionalrunhours"]
         ConfigSettings["subtractfuel"] = ['float', 'Subtract Fuel', 15, "0.0", "", 0, GENMON_CONFIG, GENMON_SECTION, "subtractfuel"]
         #ConfigSettings["kwlog"] = ['string', 'Power Log Name / Disable', 16, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "kwlog"]
-        ConfigSettings["kwlogmax"] = ['string', 'Maximum size Power Log (MB)', 17, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "kwlogmax"]
-        ConfigSettings["currentdivider"] = ['float', 'Current Divider', 18, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "currentdivider"]
-        ConfigSettings["currentoffset"] = ['string', 'Current Offset', 19, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "currentoffset"]
-        ConfigSettings["disableplatformstats"] = ['boolean', 'Disable Platform Stats', 20, False, "", 0, GENMON_CONFIG, GENMON_SECTION, "disableplatformstats"]
-        ConfigSettings["https_port"] = ['int', 'Override HTTPS port', 21, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "https_port"]
-        ConfigSettings["user_url"] = ['string', 'User URL', 22, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "user_url"]
+        if ControllerType != 'h_100':
+            ConfigSettings["usenominallinevolts"] = ['boolean', 'Use Nominal Volts Override', 17, False, "", 0, GENMON_CONFIG, GENMON_SECTION, "usenominallinevolts"]
+            ConfigSettings["nominallinevolts"] = ['int', 'Override nominal line voltage in UI', 18, "240", "", 0, GENMON_CONFIG, GENMON_SECTION,"nominallinevolts"]
+
+        ConfigSettings["kwlogmax"] = ['string', 'Maximum size Power Log (MB)', 19, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "kwlogmax"]
+        ConfigSettings["currentdivider"] = ['float', 'Current Divider', 20, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "currentdivider"]
+        ConfigSettings["currentoffset"] = ['string', 'Current Offset', 21, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "currentoffset"]
+        ConfigSettings["disableplatformstats"] = ['boolean', 'Disable Platform Stats', 22, False, "", 0, GENMON_CONFIG, GENMON_SECTION, "disableplatformstats"]
+        ConfigSettings["https_port"] = ['int', 'Override HTTPS port', 23, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "https_port"]
+        ConfigSettings["user_url"] = ['string', 'User URL', 24, "", "", 0, GENMON_CONFIG, GENMON_SECTION, "user_url"]
 
 
         for entry, List in ConfigSettings.items():
@@ -1344,7 +1365,7 @@ def UpdateConfigFile(FileName, section, Entry, Value):
 
         try:
             config = ConfigFiles[FileName]
-        except Excpetion as e1:
+        except Exception as e1:
             LogErrorLine("Unknow file in UpdateConfigFile: " + FileName + ": " + str(e1))
             return False
 
@@ -1639,12 +1660,13 @@ if __name__ == "__main__":
     GENEXERCISE_CONFIG = ConfigFilePath + "genexercise.conf"
     GENEMAIL2SMS_CONFIG = ConfigFilePath + "genemail2sms.conf"
     GENTANKUTIL_CONFIG = ConfigFilePath + "gentankutil.conf"
+    GENALEXA_CONFIG = ConfigFilePath + "genalexa.conf"
 
     if os.geteuid() != 0:
         LogConsole("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'.")
         sys.exit(1)
 
-    ConfigFileList = [GENMON_CONFIG, MAIL_CONFIG, GENLOADER_CONFIG, GENSMS_CONFIG, MYMODEM_CONFIG, GENPUSHOVER_CONFIG, GENMQTT_CONFIG, GENSLACK_CONFIG, GENGPIOIN_CONFIG, GENEXERCISE_CONFIG, GENEMAIL2SMS_CONFIG, GENTANKUTIL_CONFIG]
+    ConfigFileList = [GENMON_CONFIG, MAIL_CONFIG, GENLOADER_CONFIG, GENSMS_CONFIG, MYMODEM_CONFIG, GENPUSHOVER_CONFIG, GENMQTT_CONFIG, GENSLACK_CONFIG, GENGPIOIN_CONFIG, GENEXERCISE_CONFIG, GENEMAIL2SMS_CONFIG, GENTANKUTIL_CONFIG, GENALEXA_CONFIG]
 
     for ConfigFile in ConfigFileList:
         if not os.path.isfile(ConfigFile):

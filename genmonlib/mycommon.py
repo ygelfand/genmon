@@ -20,6 +20,7 @@ class MyCommon(object):
         self.log = None
         self.console = None
         self.Threads = {}       # Dict of mythread objects
+        self.debug = False
         self.MaintainerAddress = "generatormonitor.software@gmail.com"
 
     #------------ MyCommon::StripJson ------------------------------------------
@@ -82,9 +83,9 @@ class MyCommon(object):
     def removeAlpha(self, inputStr):
         answer = ""
         for char in inputStr:
-            if not char.isalpha():
+            if not char.isalpha() and char != ' ':
                 answer += char
-        return answer
+        return answer.strip()
     #------------ MyCommon::MergeDicts -----------------------------------------
     def MergeDicts(self, x, y):
         #Given two dicts, merge them into a new dict as a shallow copy.
@@ -129,12 +130,19 @@ class MyCommon(object):
     def FatalError(self, Message):
         if not self.log == None:
             self.log.error(Message)
+        if not self.console == None:
+            self.console.error(Message)
         raise Exception(Message)
     #---------------------MyCommon::LogErrorLine--------------------------------
     def LogErrorLine(self, Message):
         if not self.log == None:
             self.log.error(Message + " : " + self.GetErrorLine())
 
+    # ---------- MyCommon::LogDebug---------------------------------------------
+    def LogDebug(self, Message):
+
+        if self.debug:
+            self.LogError(Message)
     #---------------------MyCommon::GetErrorLine--------------------------------
     def GetErrorLine(self):
         exc_type, exc_obj, exc_tb = sys.exc_info()

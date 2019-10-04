@@ -34,7 +34,7 @@ except Exception as e1:
     print("Error: " + str(e1))
     sys.exit(2)
 
-GENMON_VERSION = "V1.13.18"
+GENMON_VERSION = "V1.13.29"
 
 #------------ Monitor class ----------------------------------------------------
 class Monitor(MySupport):
@@ -396,7 +396,7 @@ class Monitor(MySupport):
                 "mymodbus.log", "gengpio.log", "gengpioin.log", "gensms.log",
                 "gensms_modem.log", "genmqtt.log", "genpushover.log", "gensyslog.log",
                 "genloader.log", "myserialtcp.log", "genlog.log", "genslack.log",
-                "genexercise.log","genemail2sms.log", "gentankdata.log"]
+                "genexercise.log","genemail2sms.log", "gentankutil.log", "genalexa.log"]
             for File in FilesToSend:
                 LogFile = self.LogLocation + File
                 if os.path.isfile(LogFile):
@@ -436,7 +436,7 @@ class Monitor(MySupport):
     def ProcessCommand(self, command, fromsocket = False):
 
         LocalError = False
-        command = command.decode('ascii')
+        command = command.decode('utf-8')
         msgsubject = "Generator Command Response at " + self.SiteName
         if not fromsocket:
             msgbody = "\n"
@@ -889,7 +889,7 @@ class Monitor(MySupport):
                             outstr = "Retry, System Initializing"
                         else:
                             outstr = self.ProcessCommand(data, True)
-                        conn.sendall(outstr.encode())
+                        conn.sendall(outstr.encode("utf-8"))
                     else:
                         # socket closed remotely
                         break
@@ -946,7 +946,7 @@ class Monitor(MySupport):
             except Exception as e1:
                 if self.IsStopping:
                     break
-                self.LogErrorLine("Excpetion in InterfaceServerThread" + str(e1))
+                self.LogErrorLine("Exception in InterfaceServerThread" + str(e1))
                 if self.WaitForExit("InterfaceServerThread", 0.5 ):
                     break
                 continue
