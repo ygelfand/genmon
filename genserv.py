@@ -349,6 +349,12 @@ def SendTestEmail(query_string):
             tls_disable = True
         else:
             tls_disable = False
+
+        if parameters['smtpauth_disable'].lower() == 'true':
+            smtpauth_disable = True
+        else:
+            smtpauth_disable = False
+
     except Exception as e1:
         LogErrorLine("Error parsing parameters in SendTestEmail: " + str(e1))
         LogError(str(parameters))
@@ -364,7 +370,8 @@ def SendTestEmail(query_string):
               recipient = recipient,
               password = password,
               use_ssl = use_ssl,
-              tls_disable = tls_disable
+              tls_disable = tls_disable,
+              smtpauth_disable = smtpauth_disable
         )
         return ReturnMessage
     except Exception as e1:
@@ -602,7 +609,7 @@ def GetAddOns():
         AddOnCfg['genmqtt']['parameters']['numeric_json'] = CreateAddOnParam(
             ConfigFiles[GENMQTT_CONFIG].ReadValue("numeric_json", return_type = bool, default = False),
             'boolean',
-            "If enabled will return numeric values in the Status topic as a JSON string which can be converted to an object with integer or float values.",
+            "If enabled will return numeric values in the Status, Maintenance (Evo/Nexus only) and Outage topics as a JSON string which can be converted to an object with integer or float values.",
             bounds = '',
             display_name = "JSON for Numerics")
         AddOnCfg['genmqtt']['parameters']['cert_authority_path'] = CreateAddOnParam(
@@ -794,6 +801,35 @@ def GetAddOns():
             "Name to call the generator device, i.e. 'generator'",
             bounds = 'minmax:4:50',
             display_name = "Name for generator device")
+
+        #GENSNMP
+        AddOnCfg['gensnmp'] = collections.OrderedDict()
+        AddOnCfg['gensnmp']['enable'] = ConfigFiles[GENLOADER_CONFIG].ReadValue("enable", return_type = bool, section = "gensnmp", default = False)
+        AddOnCfg['gensnmp']['title'] = "SNMP Support"
+        AddOnCfg['gensnmp']['description'] = "Allow Genmon to respond to SNMP requests"
+        AddOnCfg['gensnmp']['icon'] = "snmp"
+        AddOnCfg['gensnmp']['url'] = "https://github.com/jgyates/genmon/wiki/1----Software-Overview#gensnmppy-optional"
+        AddOnCfg['gensnmp']['parameters'] = collections.OrderedDict()
+
+        AddOnCfg['gensnmp']['parameters']['poll_frequency'] = CreateAddOnParam(
+            ConfigFiles[GENSNMP_CONFIG].ReadValue("poll_frequency", return_type = float, default = 2.0),
+            'float',
+            "The time in seconds between requesting status from genmon. The default value is 2 seconds.",
+            bounds = 'number',
+            display_name = "Poll Interval")
+        AddOnCfg['gensnmp']['parameters']['enterpriseid'] = CreateAddOnParam(
+            ConfigFiles[GENSNMP_CONFIG].ReadValue("enterpriseid", return_type = int, default = 9999),
+            'int',
+            "The enterprise ID used in the SNMP Object Identifier (OID).",
+            bounds = 'required digits',
+            display_name = "Enterprise ID")
+        AddOnCfg['gensnmp']['parameters']['community'] = CreateAddOnParam(
+            ConfigFiles[GENSNMP_CONFIG].ReadValue("community", return_type = str, default = "public"),
+            'string',
+            "SNMP Community string",
+            bounds = 'minmax:4:50',
+            display_name = "SNMP Community")
+
     except Exception as e1:
         LogErrorLine("Error in GetAddOns: " + str(e1))
 
@@ -860,7 +896,8 @@ def SaveAddOnSettings(query_string):
             "genexercise" : ConfigFiles[GENEXERCISE_CONFIG],
             "genemail2sms" : ConfigFiles[GENEMAIL2SMS_CONFIG],
             "gentankutil" : ConfigFiles[GENTANKUTIL_CONFIG],
-            "genalexa" : ConfigFiles[GENALEXA_CONFIG]
+            "genalexa" : ConfigFiles[GENALEXA_CONFIG],
+            "gensnmp" : ConfigFiles[GENSNMP_CONFIG]
         }
 
         for module, entries in settings.items():   # module
@@ -1164,6 +1201,7 @@ def ReadSettingsFromFile():
     ConfigSettings["optimizeforslowercpu"] = ['boolean', 'Optimize for slower CPUs', 25, False, "", "", GENMON_CONFIG, GENMON_SECTION, "optimizeforslowercpu"]
     ConfigSettings["disablepowerlog"] = ['boolean', 'Disable Power / Current Display', 26, False, "", "", GENMON_CONFIG, GENMON_SECTION, "disablepowerlog"]
     ConfigSettings["autofeedback"] = ['boolean', 'Automated Feedback', 29, False, "", "", GENMON_CONFIG, GENMON_SECTION, "autofeedback"]
+    ConfigSettings["update_check"] = ['boolean', 'Check for Software Update', 30, True, "", "", GENMON_CONFIG, GENMON_SECTION, "update_check"]
 
     ConfigSettings["nominalfrequency"] = ['list', 'Rated Frequency', 101, "60", "", "50,60", GENMON_CONFIG, GENMON_SECTION, "nominalfrequency"]
     ConfigSettings["nominalrpm"] = ['int', 'Nominal RPM', 102, "3600", "", "required digits range:1500:4000", GENMON_CONFIG, GENMON_SECTION, "nominalrpm"]
@@ -1211,6 +1249,7 @@ def ReadSettingsFromFile():
     ConfigSettings["smtp_port"] = ['int', 'SMTP Server Port', 307, 587, "", "digits", MAIL_CONFIG, MAIL_SECTION, "smtp_port"]
     ConfigSettings["ssl_enabled"] = ['boolean', 'Use SSL Encryption', 308, False, "", "", MAIL_CONFIG, MAIL_SECTION, "ssl_enabled"]
     ConfigSettings["tls_disable"] = ['boolean', 'Disable TLS Encryption', 309, False, "", "", MAIL_CONFIG, MAIL_SECTION, "tls_disable"]
+    ConfigSettings["smtpauth_disable"] = ['boolean', 'Disable SMTP Auth', 309, False, "", "", MAIL_CONFIG, MAIL_SECTION, "smtpauth_disable"]
 
     ConfigSettings["disableimap"] = ['boolean', 'Disable Receiving Email', 400, False, "", "", MAIL_CONFIG, MAIL_SECTION, "disableimap"]
     ConfigSettings["imap_server"] = ['string', 'IMAP Server <br><small>(leave emtpy to disable)</small>', 401, "imap.gmail.com", "", "InternetAddress", MAIL_CONFIG, MAIL_SECTION, "imap_server"]
@@ -1661,12 +1700,13 @@ if __name__ == "__main__":
     GENEMAIL2SMS_CONFIG = ConfigFilePath + "genemail2sms.conf"
     GENTANKUTIL_CONFIG = ConfigFilePath + "gentankutil.conf"
     GENALEXA_CONFIG = ConfigFilePath + "genalexa.conf"
+    GENSNMP_CONFIG = ConfigFilePath + "gensnmp.conf"
 
     if os.geteuid() != 0:
         LogConsole("You need to have root privileges to run this script.\nPlease try again, this time using 'sudo'.")
         sys.exit(1)
 
-    ConfigFileList = [GENMON_CONFIG, MAIL_CONFIG, GENLOADER_CONFIG, GENSMS_CONFIG, MYMODEM_CONFIG, GENPUSHOVER_CONFIG, GENMQTT_CONFIG, GENSLACK_CONFIG, GENGPIOIN_CONFIG, GENEXERCISE_CONFIG, GENEMAIL2SMS_CONFIG, GENTANKUTIL_CONFIG, GENALEXA_CONFIG]
+    ConfigFileList = [GENMON_CONFIG, MAIL_CONFIG, GENLOADER_CONFIG, GENSMS_CONFIG, MYMODEM_CONFIG, GENPUSHOVER_CONFIG, GENMQTT_CONFIG, GENSLACK_CONFIG, GENGPIOIN_CONFIG, GENEXERCISE_CONFIG, GENEMAIL2SMS_CONFIG, GENTANKUTIL_CONFIG, GENALEXA_CONFIG, GENSNMP_CONFIG]
 
     for ConfigFile in ConfigFileList:
         if not os.path.isfile(ConfigFile):

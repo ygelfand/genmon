@@ -438,21 +438,21 @@ class GeneratorController(MySupport):
             self.LogErrorLine("Error in DisplayLogs: " + str(e1))
 
     #------------ GeneratorController::DisplayMaintenance ----------------------
-    def DisplayMaintenance (self, DictOut = False):
+    def DisplayMaintenance (self, DictOut = False, JSONNum = False):
         try:
             pass
         except Exception as e1:
             self.LogErrorLine("Error in DisplayMaintenance: " + str(e1))
 
     #------------ GeneratorController::DisplayStatus ---------------------------
-    def DisplayStatus(self, DictOut = False):
+    def DisplayStatus(self, DictOut = False, JSONNum = False):
         try:
             pass
         except Exception as e1:
             self.LogErrorLine("Error in DisplayStatus: " + str(e1))
 
     #------------------- GeneratorController::DisplayOutage --------------------
-    def DisplayOutage(self, DictOut = False):
+    def DisplayOutage(self, DictOut = False, JSONNum = False):
         try:
             pass
         except Exception as e1:
@@ -692,7 +692,7 @@ class GeneratorController(MySupport):
                     elif len(strDuration):
                         OutageLog.insert(0, [Items[0], strDuration])
 
-                    if len(OutageLog) > 50:     # limit log to 50 entries
+                    if len(OutageLog) > 100:     # limit log to 100 entries
                         OutageLog.pop()
 
             for Items in OutageLog:
@@ -1116,7 +1116,7 @@ class GeneratorController(MySupport):
 
         if not self.FuelConsumptionGaugeSupported():
             return None
-        if not self.FuelCalculationSupported() and not self.FuelSensorSupported():
+        if not self.FuelTankCalculationSupported() and not self.FuelSensorSupported():
             return None
 
         if self.FuelSensorSupported():
@@ -1140,7 +1140,7 @@ class GeneratorController(MySupport):
         try:
             if not self.FuelConsumptionGaugeSupported():
                 return True
-            if not self.FuelCalculationSupported() and not self.FuelSensorSupported():
+            if not self.FuelTankCalculationSupported() and not self.FuelSensorSupported():
                 return True
 
             FuelLevel = self.GetFuelLevel(ReturnFloat = True)
@@ -1174,7 +1174,7 @@ class GeneratorController(MySupport):
 
         if not self.FuelConsumptionGaugeSupported():
             return DefaultReturn
-        if not self.FuelCalculationSupported():
+        if not self.FuelTankCalculationSupported():
             return DefaultReturn
 
         if self.TankSize == 0:
@@ -1206,8 +1206,8 @@ class GeneratorController(MySupport):
     #----------  GeneratorController::FuelSensorSupported------------------------
     def FuelSensorSupported(self):
         return False
-    #----------  GeneratorController::FuelCalculationSupported------------------
-    def FuelCalculationSupported(self):
+    #----------  GeneratorController::FuelTankCalculationSupported------------------
+    def FuelTankCalculationSupported(self):
         return False
     #----------  GeneratorController::FuelConsumptionSupported------------------
     def FuelConsumptionSupported(self):

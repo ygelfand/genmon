@@ -34,7 +34,7 @@ except Exception as e1:
     print("Error: " + str(e1))
     sys.exit(2)
 
-GENMON_VERSION = "V1.13.29"
+GENMON_VERSION = "V1.14.03"
 
 #------------ Monitor class ----------------------------------------------------
 class Monitor(MySupport):
@@ -127,6 +127,7 @@ class Monitor(MySupport):
             self.Version = GENMON_VERSION
 
         self.ProgramStartTime = datetime.datetime.now()     # used for com metrics
+        self.LastSofwareUpdateCheck = datetime.datetime.now()
 
         atexit.register(self.Close)
         signal.signal(signal.SIGTERM, self.Close)
@@ -275,6 +276,10 @@ class Monitor(MySupport):
                         self.FeedbackMessages = json.load(infile)
                 except Exception as e1:
                     os.remove(self.FeedbackLogFile)
+
+            self.UpdateCheck = self.config.ReadValue('update_check', return_type = bool, default = True)
+            self.UserURL = self.config.ReadValue('user_url',  default = "").strip()
+
         except Exception as e1:
             self.Console("Missing config file or config file entries (genmon): " + str(e1))
             return False
@@ -396,7 +401,8 @@ class Monitor(MySupport):
                 "mymodbus.log", "gengpio.log", "gengpioin.log", "gensms.log",
                 "gensms_modem.log", "genmqtt.log", "genpushover.log", "gensyslog.log",
                 "genloader.log", "myserialtcp.log", "genlog.log", "genslack.log",
-                "genexercise.log","genemail2sms.log", "gentankutil.log", "genalexa.log"]
+                "genexercise.log","genemail2sms.log", "gentankutil.log", "genalexa.log",
+                "gensnmp.log"]
             for File in FilesToSend:
                 LogFile = self.LogLocation + File
                 if os.path.isfile(LogFile):
@@ -490,9 +496,12 @@ class Monitor(MySupport):
             "status_json"       : [self.Controller.DisplayStatus, (True,), True],
             "status_num_json"   : [self.Controller.DisplayStatus, (True,True), True],
             "maint_json"        : [self.Controller.DisplayMaintenance, (True,), True],
+            "maint_num_json"    : [self.Controller.DisplayMaintenance, (True,True), True],
             "monitor_json"      : [self.DisplayMonitor, (True,), True],
+            "monitor_num_json"  : [self.DisplayMonitor, (True,True), True],
             "weather_json"      : [self.DisplayWeather, (True,), True],
             "outage_json"       : [self.Controller.DisplayOutage, (True,), True],
+            "outage_num_json"   : [self.Controller.DisplayOutage, (True,True), True],
             "gui_status_json"   : [self.GetStatusForGUI, (), True],
             "get_maint_log_json": [self.Controller.GetMaintLog, (), True],
             "add_maint_log"     : [self.Controller.AddEntryToMaintLog, (command,), True],    # Do not do command.lower() since this input is JSON
@@ -653,7 +662,7 @@ class Monitor(MySupport):
         return WeatherData
 
     #------------ Monitor::DisplayMonitor --------------------------------------
-    def DisplayMonitor(self, DictOut = False):
+    def DisplayMonitor(self, DictOut = False, JSONNum = False):
 
         try:
             Monitor = collections.OrderedDict()
@@ -662,7 +671,7 @@ class Monitor(MySupport):
             GenMonStats = []
             SerialStats = []
             MonitorData.append({"Generator Monitor Stats" : GenMonStats})
-            MonitorData.append({"Serial Stats" : self.Controller.GetCommStatus()})
+            MonitorData.append({"Communication Stats" : self.Controller.GetCommStatus()})
 
             GenMonStats.append({"Monitor Health" :  self.GetSystemHealth()})
             GenMonStats.append({"Controller" : self.Controller.GetController(Actual = False)})
@@ -813,22 +822,62 @@ class Monitor(MySupport):
             WatchDogPollTime = 2
 
         while True:
+            try:
+                # check for software update
+                self.CheckSoftwareUpdate()
+                self.CommunicationsActive = self.Controller.ComminicationsIsActive()
 
-            self.CommunicationsActive = self.Controller.ComminicationsIsActive()
+                if self.CommunicationsActive:
+                    LastActiveTime = datetime.datetime.now()
+                    if NoticeSent:
+                        NoticeSent = False
+                        self.MessagePipe.SendMessage("Generator Monitor Communication Restored at " + self.SiteName, "Generator Monitor communications with the controller has been restored at " + self.SiteName , msgtype = "info")
+                else:
+                    if self.GetDeltaTimeMinutes(datetime.datetime.now() - LastActiveTime) > 1 :
+                        if not NoticeSent:
+                            NoticeSent = True
+                            self.MessagePipe.SendMessage("Generator Monitor Communication WARNING at " + self.SiteName, "Generator Monitor is not communicating with the controller at " + self.SiteName , msgtype = "error")
 
-            if self.CommunicationsActive:
-                LastActiveTime = datetime.datetime.now()
-                if NoticeSent:
-                    NoticeSent = False
-                    self.MessagePipe.SendMessage("Generator Monitor Communication Restored at " + self.SiteName, "Generator Monitor communications with the controller has been restored at " + self.SiteName , msgtype = "info")
-            else:
-                if self.GetDeltaTimeMinutes(datetime.datetime.now() - LastActiveTime) > 1 :
-                    if not NoticeSent:
-                        NoticeSent = True
-                        self.MessagePipe.SendMessage("Generator Monitor Communication WARNING at " + self.SiteName, "Generator Monitor is not communicating with the controller at " + self.SiteName , msgtype = "error")
+            except Exception as e1:
+                self.LogErrorLine("Error in ComWatchDog: " + str(e1))
 
             if self.WaitForExit("ComWatchDog", WatchDogPollTime):
                 return
+    #---------- Monitor::CheckSoftwareUpdate------------------------------------
+    def CheckSoftwareUpdate(self):
+
+        if not self.UpdateCheck:
+            return
+        try:
+            if self.GetDeltaTimeMinutes(datetime.datetime.now() - self.LastSofwareUpdateCheck) > 1440 :     # check every day
+                self.LastSofwareUpdateCheck = datetime.datetime.now()
+                # Do the check
+                try:
+                    import urllib2
+                    url = "https://raw.githubusercontent.com/jgyates/genmon/master/genmon.py"
+                    data = urllib2.urlopen(url).read(20000) # read only 2000 chars
+                    data = data.split("\n") # then split it into lines
+
+                    for line in data:
+
+                        if 'GENMON_VERSION = "V' in line:
+                            import re
+                            quoted = re.compile('"([^"]*)"')
+                            for value in quoted.findall(line):
+                                if value != GENMON_VERSION:
+                                    # Update Available
+                                    title = self.ProgramName + " Software Update " + value + " is available for site " + self.SiteName
+                                    msgbody = "\nA software update is available for the " + self.ProgramName + ". The new version (" + value + ") can be updated on the About page of the web interface. You can disable this email from being sent on the Settings page."
+                                    if len(self.UserURL):
+                                        msgbody += "\n\nWeb Interface URL: " + self.UserURL
+                                    msgbody += "\n\nChange Log: https://raw.githubusercontent.com/jgyates/genmon/master/changelog.md"
+                                    self.MessagePipe.SendMessage(title , msgbody, msgtype = "info", onlyonce = True)
+
+                except Exception as e1:
+                    self.LogErrorLine("Error checking for software update: " + str(e1))
+
+        except Exception as e1:
+            self.LogErrorLine("Error in CheckSoftwareUpdate: " + str(e1))
 
     #---------- Monitor::LogFileIsOK--------------------------------------------
     def LogFileIsOK(self):

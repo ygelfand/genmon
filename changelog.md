@@ -1,5 +1,48 @@
-# Changelog
+# Change Log
 All notable changes to this project will be documented in this file. Major releases are documented [here](https://github.com/jgyates/genmon/releases)
+
+## V1.14.03 - 2020-02-17
+- Updated MQTT support to allow numeric values for Maintenance and Outage related data (Evo/Nexus)
+
+## V1.14.02 - 2020-02-08
+- Added SNMP graphic on add on page
+
+## V1.14.01 - 2020-02-02
+- Minor change to logic in gensnmp.py to avoid namespace collision
+- Correct typo
+
+## V1.14.00 - 2020-02-01
+- Added SNMP Add On. See https://github.com/jgyates/genmon/wiki/1----Software-Overview#gensnmppy-optional for details
+- Changed a few labels of exported JSON data to better support SNMP and avoid namespace conflicts. There is a small chance this could effect some MQTT users depending on how deeply you have relied on namespace paths.
+- Added option to send an email if a software update is available. This can be disabled on the settings page.
+- Note: The update may take slightly longer since a new library has to be installed during the update process.
+
+## V1.13.38 - 2020-01-17
+- Changed text to "Inspect Battery" for Nexus models
+
+## V1.13.37 - 2020-01-16
+- Workaround for bug in gauge display for Safari mobile browsers
+
+## V1.13.36 - 2020-01-11
+- Corrected bug in reporting of weather (rain and snow in last 1 or 3 hours)
+
+## V1.13.35 - 2020-01-09
+- Added SMTP Auth Disable configuration setting
+
+## V1.13.34 - 2020-01-09
+- Corrected fuel calculation issue for NG systems
+
+## V1.13.33 - 2019-12-18
+- Added new alarm data for Evolution 2.0
+
+## V1.13.32 - 2019-11-16
+- Added new alarm log entry for Nexus
+
+## V1.13.31 - 2019-11-14
+- Added alarm code for "Battery Problem"
+
+## V1.13.30 - 2019-11-03
+- Update to allow outage log to display 100 instead of 50 entries
 
 ## V1.13.29 - 2019-08-20
 - Fixed a few typos

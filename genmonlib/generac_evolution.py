@@ -466,8 +466,8 @@ class Evolution(GeneratorController):
             return True
         return False
 
-    #----------  GeneratorController::FuelCalculationSupported------------------
-    def FuelCalculationSupported(self):
+    #----------  GeneratorController::FuelTankCalculationSupported--------------
+    def FuelTankCalculationSupported(self):
 
         if not self.PowerMeterIsSupported():
             return False
@@ -489,7 +489,7 @@ class Evolution(GeneratorController):
     #----------  GeneratorController::FuelConsumptionGaugeSupported-------------
     def FuelConsumptionGaugeSupported(self):
 
-        if self.FuelCalculationSupported() and self.FuelType != "Natural Gas":
+        if self.FuelTankCalculationSupported() and self.FuelType != "Natural Gas":
             return True
         return False
     #----------  GeneratorController::GetFuelConsumptionPolynomial--------------
@@ -1698,7 +1698,7 @@ class Evolution(GeneratorController):
                     msgbody = "\nUtility Power Restored. Duration of outage " + OutageStr
                     self.MessagePipe.SendMessage("Outage Recovery Notice at " + self.SiteName, msgbody, msgtype = "outage")
                     try:
-                        if self.FuelCalculationSupported():
+                        if self.FuelConsumptionSupported():
                             if self.LastOutageDuration.total_seconds():
                                 FuelUsed = self.GetPowerHistory("power_log_json=%d,fuel" % self.LastOutageDuration.total_seconds())
                             else:
@@ -1795,7 +1795,7 @@ class Evolution(GeneratorController):
             self.LogErrorLine("Error in CheckForAlarms: " + str(e1))
 
     #------------ Evolution:DisplayMaintenance ---------------------------------
-    def DisplayMaintenance (self, DictOut = False):
+    def DisplayMaintenance (self, DictOut = False, JSONNum = False):
 
         try:
             # use ordered dict to maintain order of output
@@ -1804,21 +1804,27 @@ class Evolution(GeneratorController):
             Maintenance["Maintenance"] = []
             Maintenance["Maintenance"].append({"Model" : self.Model})
             Maintenance["Maintenance"].append({"Generator Serial Number" : self.GetSerialNumber()})
-            Maintenance["Maintenance"].append({"Controller" : self.GetController()})
+            Maintenance["Maintenance"].append({"Controller Detected" : self.GetController()})
             Maintenance["Maintenance"].append({"Nominal RPM" : self.NominalRPM})
             Maintenance["Maintenance"].append({"Rated kW" : str(self.NominalKW) + " kW"})
             Maintenance["Maintenance"].append({"Nominal Frequency" : str(self.NominalFreq) + " Hz"})
             Maintenance["Maintenance"].append({"Fuel Type" : self.FuelType})
             if self.FuelSensorSupported():
-                Maintenance["Maintenance"].append({"Fuel Level Sensor" : self.GetFuelSensor()})
+                Maintenance["Maintenance"].append({"Fuel Level Sensor" : self.ValueOut(self.GetFuelSensor(ReturnInt = True), "%", JSONNum)})
             if self.FuelConsumptionGaugeSupported():
-                Maintenance["Maintenance"].append({"Estimated Fuel In Tank" : self.GetEstimatedFuelInTank()})
+                if self.UseMetric:
+                    Units = "L"
+                else:
+                    Units = "gal"
+                Maintenance["Maintenance"].append({"Estimated Fuel In Tank" : self.ValueOut(self.GetEstimatedFuelInTank(ReturnFloat = True), Units, JSONNum)})
+
 
             if self.EngineDisplacement != "Unknown":
-                Maintenance["Maintenance"].append({"Engine Displacement" : self.EngineDisplacement})
+                Maintenance["Maintenance"].append({"Engine Displacement" : self.UnitsOut( self.EngineDisplacement, type = float, NoString = JSONNum)})
+
 
             if self.EvolutionController and self.Evolution2:
-                Maintenance["Maintenance"].append({"Ambient Temperature Sensor" : self.GetParameter("05ed", Label = "F")})
+                Maintenance["Maintenance"].append({"Ambient Temperature Sensor" : self.ValueOut(self.GetParameter("05ed", ReturnInt = True), "F", JSONNum)})
 
             # Only update power log related info once a min for performance reasons
             if self.LastHouseKeepingTime == None or self.GetDeltaTimeMinutes(datetime.datetime.now() - self.LastHouseKeepingTime) >= 1 :
@@ -1826,7 +1832,7 @@ class Evolution(GeneratorController):
                 self.LastHouseKeepingTime = datetime.datetime.now()
             else:
                 UpdateNow = False
-            if self.PowerMeterIsSupported() and self.FuelCalculationSupported():
+            if self.PowerMeterIsSupported() and self.FuelConsumptionSupported():
                 if UpdateNow:
                     self.KWHoursMonth = self.GetPowerHistory("power_log_json=43200,kw")
                     self.FuelMonth = self.GetPowerHistory("power_log_json=43200,fuel")
@@ -1834,40 +1840,40 @@ class Evolution(GeneratorController):
                     self.RunHoursMonth = self.GetPowerHistory("power_log_json=43200,time")
 
                 if self.KWHoursMonth != None:
-                    Maintenance["Maintenance"].append({"kW Hours in last 30 days" : str(self.KWHoursMonth) + " kWh"})
+                    Maintenance["Maintenance"].append({"kW Hours in last 30 days" : self.UnitsOut(str(self.KWHoursMonth) + " kWh", type = float, NoString = JSONNum)})
                 if self.FuelMonth != None:
-                    Maintenance["Maintenance"].append({"Fuel Consumption in last 30 days" : self.FuelMonth})
+                    Maintenance["Maintenance"].append({"Fuel Consumption in last 30 days" : self.UnitsOut(self.FuelMonth, type = float, NoString = JSONNum)})
                 if self.FuelTotal != None:
-                    Maintenance["Maintenance"].append({"Total Power Log Fuel Consumption" : self.FuelTotal})
+                    Maintenance["Maintenance"].append({"Total Power Log Fuel Consumption" : self.UnitsOut(self.FuelTotal, type = float, NoString = JSONNum)})
                 if self.RunHoursMonth != None:
-                    Maintenance["Maintenance"].append({"Run Hours in last 30 days" : str(self.RunHoursMonth) + " h"})
+                    Maintenance["Maintenance"].append({"Run Hours in last 30 days" : self.UnitsOut(str(self.RunHoursMonth) + " h", type = float, NoString = JSONNum)})
 
 
             ControllerSettings = []
             Maintenance["Maintenance"].append({"Controller Settings" : ControllerSettings})
 
             if self.EvolutionController and not self.LiquidCooled:
-                ControllerSettings.append({"Calibrate Current 1" : self.GetParameter("05f6")})
-                ControllerSettings.append({"Calibrate Current 2" : self.GetParameter("05f7")})
+                ControllerSettings.append({"Calibrate Current 1" : self.ValueOut(self.GetParameter("05f6", ReturnInt = True), "", JSONNum)})
+                ControllerSettings.append({"Calibrate Current 2" : self.ValueOut(self.GetParameter("05f7", ReturnInt = True), "", JSONNum)})
 
             if not self.PreNexus:
-                ControllerSettings.append({"Calibrate Volts" : self.GetParameter("0208")})
+                ControllerSettings.append({"Calibrate Volts" : self.ValueOut(self.GetParameter("0208", ReturnInt = True), "", JSONNum)})
 
             ControllerSettings.append({"Nominal Line Voltage" : str(self.GetModelInfo( "nominalvolts")) +  " V"})
             ControllerSettings.append({"Rated Max Power" : str(self.GetModelInfo( "kw")) +  " kW"})
             if self.LiquidCooled:
 
-                ControllerSettings.append({"Param Group" : self.GetParameter("020a")})
-                ControllerSettings.append({"Voltage Code" : self.GetParameter("020b")})
+                ControllerSettings.append({"Param Group" : self.ValueOut(self.GetParameter("020a", ReturnInt = True), "", JSONNum)})
+                ControllerSettings.append({"Voltage Code" : self.ValueOut(self.GetParameter("020b", ReturnInt = True), "", JSONNum)})
                 ControllerSettings.append({"Phase" : self.GetLiquidCooledModelInfo( "phase")})
 
                 if self.EvolutionController and self.LiquidCooled:
                     # get total hours since activation
-                    ControllerSettings.append({"Hours of Protection" : self.GetParameter("0054", Label = "H")})
-                    ControllerSettings.append({"Volts Per Hertz" : self.GetParameter("020e")})
-                    ControllerSettings.append({"Gain" : self.GetParameter("0235")})
-                    ControllerSettings.append({"Rated Frequency" : self.GetParameter("005a", Label = "Hz")})
-                    ControllerSettings.append({"Rated Voltage" : self.GetParameter("0059", Label = "V")})
+                    ControllerSettings.append({"Hours of Protection" : self.ValueOut(self.GetParameter("0054", ReturnInt = True), "h", JSONNum)})
+                    ControllerSettings.append({"Volts Per Hertz" : self.ValueOut(self.GetParameter("020e", ReturnInt = True), "", JSONNum)})
+                    ControllerSettings.append({"Gain" : self.ValueOut(self.GetParameter("0235", ReturnInt = True), "", JSONNum)})
+                    ControllerSettings.append({"Target Frequency" : self.ValueOut(self.GetParameter("005a", ReturnInt = True), "Hz", JSONNum)})
+                    ControllerSettings.append({"Target Voltage" : self.ValueOut(self.GetParameter("0059", ReturnInt = True), "V", JSONNum)})
 
             if not self.SmartSwitch:
                 Exercise = []
@@ -1901,7 +1907,7 @@ class Evolution(GeneratorController):
                     if not self.LiquidCooled:
                         Service.append({"Battery Check Due" : self.GetServiceDueDate("BATTERY")})
 
-            Service.append({"Total Run Hours" : self.GetRunHours()})
+            Service.append({"Total Run Hours" : self.ValueOut(self.GetRunHours(ReturnFloat = True), "h", JSONNum)})
             Service.append({"Hardware Version" : self.GetHardwareVersion()})
             Service.append({"Firmware Version" : self.GetFirmwareVersion()})
 
@@ -2280,6 +2286,7 @@ class Evolution(GeneratorController):
         0x03 : "Overspeed",                  # Validated on Nexus Air Cooled
         0x04 : "RPM Sense Loss",             # Validated on Nexus Liquid Cooled and Air Cooled
         0x05 : "Underspeed",
+        0x08 : "WIRING ERROR",               # Validasted on Nexus Air Cooled
         #0x09 : "UNKNOWN",
         0x0a : "Under Voltage",              #  Validated on Nexus AC
         0x0B : "Low Cooling Fluid",          # Validated on Nexus Liquid Cooled
@@ -2291,7 +2298,7 @@ class Evolution(GeneratorController):
         0x16 : "Change Oil & Filter",        # Validated on Nexus Air Cooled
         0x17 : "Inspect Air Filter",         # Validated on Nexus Air Cooled
         0x19 : "Inspect Spark Plugs",        # Validated on Nexus Air Cooled
-        0x1b : "Check Battery",              # Validated on Nexus Air Cooled
+        0x1b : "Inspect Battery",            # Validated on Nexus Air Cooled
         0x1E : "Low Fuel Pressure",          # Validated on Nexus Liquid Cooled
         0x21 : "Service Schedule A",         # Validated on Nexus Liquid Cooled
         0x22 : "Service Schedule B"          # Validated on Nexus Liquid Cooled
@@ -2523,11 +2530,13 @@ class Evolution(GeneratorController):
          0x10 : "Inspect Air Filter",   #  Validate on Nexus LC
          0x12 : "Check for Service",    #  Validate on Nexus AC (Spark Plugs service due?)
          0x14 : "Check Battery",        #  Validate on Nexus, occurred when Check Battery Alarm
+         0x15 : "Underspeed",           #  Validate on Evo AC 2
          0x1c : "Throttle Failure",     #  Validate on Nexus LC,
          0x1e : "Under Voltage",        #  Validate on EvoAC
          0x1f : "Service Due",          #  Validate on Evolution, occurred when forced service due
          0x20 : "Service Complete",     #  Validate on Evolution, occurred when service reset
          0x2b : "Charger Missing AC",   #  Validate on EvoAC, occurred when Charger Missing AC Warning
+         0x29 : "Battery Problem",      #  Validate on EvoLC
          0x30 : "Ruptured Tank",        #  Validate on Evolution, occurred when forced ruptured tank
          0x31 : "Low Fuel Level",       #  Validate on Evolution, occurred when Low Fuel Level
          0x32 : "Low Fuel Pressure",    #  Validate on EvoLC
@@ -2720,6 +2729,8 @@ class Evolution(GeneratorController):
                 return "Running in Alarm"
             else:
                 return "Running"
+        elif self.BitIsEqual(RegVal, 0x000F0000, 0x00080000):
+            return "Stopped in Alarm"
         elif self.BitIsEqual(RegVal, 0x000F0000, 0x00060000):
             return "Running in Warning"
         elif self.BitIsEqual(RegVal, 0x000F0000, 0x00080000):
@@ -3531,7 +3542,7 @@ class Evolution(GeneratorController):
 
 
     #------------ Evolution:GetRunHours ----------------------------------------
-    def GetRunHours(self):
+    def GetRunHours(self, ReturnFloat = False):
 
         try:
             RunHours = None
@@ -3547,13 +3558,18 @@ class Evolution(GeneratorController):
                     RunHours = "0.0"
                 if self.AdditionalRunHours != None:
                     RunHours = float(RunHours) + float(self.AdditionalRunHours)
-
-            return str(RunHours)
+            if ReturnFloat:
+                return float(RunHours)
+            else:
+                return str(RunHours)
         except Exception as e1:
             self.LogErrorLine("Error getting run hours: " + str(RunHours) + ":" + str(self.AdditionalRunHours) + ": "+ str(e1))
-            return "Unknown"
+            if ReturnFloat:
+                return 0.0
+            else:
+                return "0.0"
     #------------------- Evolution:DisplayOutage -------------------------------
-    def DisplayOutage(self, DictOut = False):
+    def DisplayOutage(self, DictOut = False, JSONNum = False):
 
         try:
 
@@ -3573,20 +3589,17 @@ class Evolution(GeneratorController):
             Outage["Outage"].append({"System In Outage" : "Yes" if self.SystemInOutage else "No"})
 
              # get utility voltage
-            Value = self.GetUtilityVoltage()
-            if len(Value):
-                Outage["Outage"].append({"Utility Voltage" : Value})
+            Outage["Outage"].append({"Utility Voltage" : self.ValueOut(self.GetUtilityVoltage(ReturnInt = True), "V", JSONNum)})
+            Outage["Outage"].append({"Utility Voltage Minimum" : self.ValueOut(self.UtilityVoltsMin, "V", JSONNum)})
+            Outage["Outage"].append({"Utility Voltage Maximum" : self.ValueOut(self.UtilityVoltsMax, "V", JSONNum)})
 
-            Outage["Outage"].append({"Utility Voltage Minimum" : "%d V " % (self.UtilityVoltsMin)})
-            Outage["Outage"].append({"Utility Voltage Maximum" : "%d V " % (self.UtilityVoltsMax)})
-
-            Outage["Outage"].append({"Utility Threshold Voltage" : self.GetThresholdVoltage()})
+            Outage["Outage"].append({"Utility Threshold Voltage" : self.ValueOut(self.GetThresholdVoltage(ReturnInt = True), "V", JSONNum)})
 
             if (self.EvolutionController and self.LiquidCooled) or (self.EvolutionController and self.Evolution2):
-                Outage["Outage"].append({"Utility Pickup Voltage" : self.GetPickUpVoltage()})
+                Outage["Outage"].append({"Utility Pickup Voltage" : self.ValueOut(self.GetPickUpVoltage(ReturnInt = True), "V", JSONNum)})
 
             if self.EvolutionController:
-                Outage["Outage"].append({"Startup Delay" : self.GetStartupDelay()})
+                Outage["Outage"].append({"Startup Delay" : self.UnitsOut( self.GetStartupDelay(), type = int, NoString = JSONNum)})
 
             Outage["Outage"].append({"Outage Log" : self.DisplayOutageHistory()})
 
@@ -3703,7 +3716,7 @@ class Evolution(GeneratorController):
             StartInfo["Controller"] = self.GetController(Actual = False)
             StartInfo["NominalBatteryVolts"] = "12"
             StartInfo["PowerGraph"] = self.PowerMeterIsSupported()
-            StartInfo["FuelCalculation"] = self.FuelCalculationSupported()
+            StartInfo["FuelCalculation"] = self.FuelTankCalculationSupported()
             StartInfo["FuelSensor"] = self.FuelSensorSupported()
             StartInfo["FuelConsumption"] = self.FuelConsumptionSupported()
             StartInfo["UtilityVoltage"] = True
